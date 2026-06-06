@@ -1,7 +1,5 @@
 # ShopFlow — AI-Powered E-Commerce Platform
 
-> Emumba GenAI Upskilling Assignment | 8-Week Project | 480 Points
-
 ---
 
 ## Architecture (placeholder — add diagram in Week 8)
