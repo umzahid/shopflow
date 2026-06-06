@@ -171,12 +171,12 @@ jobs:
             local name="$1" expected="$2" actual="$3"
             if echo "$actual" | grep -qE "$expected"; then
               echo "  ✅ PASS | $name"
-              ((PASS++))
+              PASS=$((PASS+1))
             else
               echo "  ❌ FAIL | $name"
               echo "     expected: $expected"
               echo "     got:      $(echo $actual | cut -c1-200)"
-              ((FAIL++))
+              FAIL=$((FAIL+1))
             fi
           }
 
