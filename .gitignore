@@ -1,0 +1,54 @@
+# Secrets — NEVER commit
+.env
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+frontend/.env.local
+frontend/.env.production
+*.tsbuildinfo
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl
+crash.log
+
+# ML artefacts
+backend/models/*.pkl
+backend/data/*.csv
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log

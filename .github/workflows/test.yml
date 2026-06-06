@@ -1,0 +1,247 @@
+name: Backend Test & API Smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── 1. Lint ────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install lint deps
+        run: pip install flake8
+
+      - name: flake8
+        run: flake8 app/ tests/
+
+  # ── 2. Unit + Integration Tests ────────────────────────────────────────────
+  test:
+    name: Pytest (unit + integration)
+    runs-on: ubuntu-latest
+    needs: lint
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: shopflow
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: shopflow
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U shopflow -d shopflow"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 3s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://shopflow:testpassword@localhost:5432/shopflow
+      REDIS_URL: redis://localhost:6379/0
+      JWT_SECRET_KEY: ci-test-secret-key-not-for-production-use-64-chars-minimum-length
+      JWT_ALGORITHM: HS256
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: 15
+      JWT_REFRESH_TOKEN_EXPIRE_DAYS: 7
+      COOKIE_SECURE: "false"
+      COOKIE_SAMESITE: lax
+      APP_ENV: test
+      DEBUG: "false"
+      CORS_ORIGINS: '["http://localhost:3000"]'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Create test database
+        run: |
+          PGPASSWORD=testpassword psql -h localhost -U shopflow -d shopflow \
+            -c "CREATE DATABASE shopflow_test;"
+
+      - name: Run Alembic migrations
+        run: alembic upgrade head
+
+      - name: Run pytest with coverage
+        run: |
+          python -m pytest tests/ -v \
+            --tb=short \
+            --cov=app \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-fail-under=70 \
+            -p no:cacheprovider
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: backend/coverage.xml
+
+  # ── 3. API Smoke Tests ─────────────────────────────────────────────────────
+  smoke:
+    name: API Smoke Tests
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write CI .env for docker-compose
+        run: |
+          {
+            echo "APP_ENV=ci"
+            echo "DEBUG=false"
+            echo "POSTGRES_PASSWORD=testpassword"
+            echo "DATABASE_URL=postgresql+asyncpg://shopflow:testpassword@postgres:5432/shopflow"
+            echo "REDIS_PASSWORD=testredis"
+            echo "REDIS_URL=redis://:testredis@redis:6379/0"
+            echo "JWT_SECRET_KEY=ci-test-secret-key-not-for-production-use-64-chars-minimum-xxxx"
+            echo "JWT_ALGORITHM=HS256"
+            echo "JWT_ACCESS_TOKEN_EXPIRE_MINUTES=15"
+            echo "JWT_REFRESH_TOKEN_EXPIRE_DAYS=7"
+            echo "COOKIE_SECURE=false"
+            echo "COOKIE_SAMESITE=lax"
+            echo "COOKIE_DOMAIN="
+            echo 'CORS_ORIGINS=["http://localhost:3000"]'
+            echo "GRAFANA_PASSWORD=admin"
+            echo "AWS_REGION=us-east-1"
+            echo "AWS_ACCESS_KEY_ID="
+            echo "AWS_SECRET_ACCESS_KEY="
+            echo "S3_BUCKET_NAME=shopflow-test"
+            echo "ANTHROPIC_API_KEY="
+            echo "NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1"
+          } > .env
+
+      - name: Build and start backend + dependencies
+        run: |
+          docker-compose up -d postgres redis backend
+          echo "Waiting for backend to become healthy..."
+          timeout 90 bash -c '
+            until curl -sf http://localhost:8000/health; do
+              sleep 3
+            done
+          '
+
+      - name: Run Alembic migrations
+        run: docker-compose exec -T backend alembic upgrade head
+
+      - name: Run API smoke tests
+        run: |
+          BASE="http://localhost:8000/api/v1"
+          PASS=0; FAIL=0
+
+          check() {
+            local name="$1" expected="$2" actual="$3"
+            if echo "$actual" | grep -qE "$expected"; then
+              echo "  ✅ PASS | $name"
+              ((PASS++))
+            else
+              echo "  ❌ FAIL | $name"
+              echo "     expected: $expected"
+              echo "     got:      $(echo $actual | cut -c1-200)"
+              ((FAIL++))
+            fi
+          }
+
+          echo "=== Infrastructure ==="
+          check "Health endpoint" "ok" "$(curl -sf http://localhost:8000/health)"
+          check "Swagger docs" "200" "$(curl -so /dev/null -w '%{http_code}' http://localhost:8000/docs)"
+          check "OpenAPI JSON" "openapi" "$(curl -sf http://localhost:8000/openapi.json | head -c 100)"
+
+          echo "=== Security Headers ==="
+          HDRS=$(curl -sI -X GET http://localhost:8000/health)
+          check "X-Content-Type-Options" "nosniff" "$HDRS"
+          check "X-Frame-Options" "DENY" "$HDRS"
+          check "X-XSS-Protection" "xss" "$HDRS"
+
+          echo "=== Auth: Register ==="
+          R=$(curl -s -c /tmp/cook.txt -o /tmp/r.json -w "%{http_code}" -X POST "$BASE/auth/register" \
+            -H "Content-Type: application/json" \
+            -d '{"email":"smoke@test.io","password":"Password123","role":"customer"}')
+          B=$(cat /tmp/r.json)
+          check "Register → 201" "201" "$R"
+          check "Returns access_token" "access_token" "$B"
+          check "No password_hash exposed" "200" "$(echo $B | grep -v password_hash && echo 200)"
+
+          echo "=== Auth: Login ==="
+          R=$(curl -s -c /tmp/cook2.txt -o /tmp/r.json -w "%{http_code}" -X POST "$BASE/auth/login" \
+            -H "Content-Type: application/json" \
+            -d '{"email":"smoke@test.io","password":"Password123"}')
+          check "Login → 200" "200" "$R"
+          check "Login returns token" "access_token" "$(cat /tmp/r.json)"
+
+          echo "=== Auth: Error Cases ==="
+          R=$(curl -s -o /tmp/r.json -w "%{http_code}" -X POST "$BASE/auth/register" \
+            -H "Content-Type: application/json" \
+            -d '{"email":"smoke@test.io","password":"Password123"}')
+          check "Duplicate email → 409" "409" "$R"
+          check "409 is RFC 7807" "type" "$(cat /tmp/r.json)"
+
+          R=$(curl -s -o /tmp/r.json -w "%{http_code}" -X POST "$BASE/auth/login" \
+            -H "Content-Type: application/json" \
+            -d '{"email":"smoke@test.io","password":"wrongpass"}')
+          check "Wrong password → 401" "401" "$R"
+          check "No user enumeration" "Invalid credentials" "$(cat /tmp/r.json)"
+
+          echo "=== Auth: Refresh & Logout ==="
+          R=$(curl -s -b /tmp/cook2.txt -c /tmp/cook2.txt -o /tmp/r.json -w "%{http_code}" \
+            -X POST "$BASE/auth/refresh")
+          check "Refresh → 200" "200" "$R"
+          check "Refresh issues new token" "access_token" "$(cat /tmp/r.json)"
+
+          R=$(curl -s -b /tmp/cook2.txt -o /tmp/r.json -w "%{http_code}" -X DELETE "$BASE/auth/logout")
+          check "Logout → 204" "204" "$R"
+          R=$(curl -s -b /tmp/cook2.txt -o /tmp/r.json -w "%{http_code}" -X POST "$BASE/auth/refresh")
+          check "Token revoked after logout → 401" "401" "$R"
+
+          echo ""
+          echo "══════════════════════════════════"
+          echo "TOTAL: $((PASS+FAIL)) | ✅ $PASS passed | ❌ $FAIL failed"
+          echo "══════════════════════════════════"
+
+          [ $FAIL -eq 0 ] || exit 1
+
+      - name: Show backend logs on failure
+        if: failure()
+        run: docker-compose logs backend
+
+      - name: Tear down
+        if: always()
+        run: docker-compose down -v
