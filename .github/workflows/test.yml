@@ -123,7 +123,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Write CI .env for docker-compose
+      - name: Write CI .env for docker compose
         run: |
           {
             echo "APP_ENV=ci"
@@ -151,7 +151,7 @@ jobs:
 
       - name: Build and start backend + dependencies
         run: |
-          docker-compose up -d postgres redis backend
+          docker compose up -d postgres redis backend
           echo "Waiting for backend to become healthy..."
           timeout 90 bash -c '
             until curl -sf http://localhost:8000/health; do
@@ -160,7 +160,7 @@ jobs:
           '
 
       - name: Run Alembic migrations
-        run: docker-compose exec -T backend alembic upgrade head
+        run: docker compose exec -T backend alembic upgrade head
 
       - name: Run API smoke tests
         run: |
@@ -240,8 +240,8 @@ jobs:
 
       - name: Show backend logs on failure
         if: failure()
-        run: docker-compose logs backend
+        run: docker compose logs backend
 
       - name: Tear down
         if: always()
-        run: docker-compose down -v
+        run: docker compose down -v
