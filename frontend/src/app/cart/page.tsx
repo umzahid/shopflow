@@ -11,11 +11,11 @@ import {
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/Toast";
 import { useCart, useCartCount, useCartLines, useCartSubtotal } from "@/store/cart";
 import { cn, formatPrice } from "@/lib/utils";
@@ -26,6 +26,7 @@ export default function CartPage() {
   const count = useCartCount();
   const { setQty, remove, clear } = useCart.getState();
   const { toast } = useToast();
+  const router = useRouter();
 
   // Wait until after hydration to read persisted cart — otherwise SSR shows
   // empty cart and client paints filled cart, which counts as content jump.
@@ -35,19 +36,19 @@ export default function CartPage() {
   const [coupon, setCoupon] = useState("");
 
   const handleCheckout = () => {
-    toast({
-      title: "Checkout coming soon",
-      description:
-        "Sign-in and shipping form land in the next session. Items stay saved.",
-      variant: "info",
-    });
+    // The /checkout route applies coupon + shipping + AuthGuard. Carry the
+    // coupon through via querystring so the form pre-fills.
+    const url = coupon.trim()
+      ? `/checkout?coupon=${encodeURIComponent(coupon.trim())}`
+      : "/checkout";
+    router.push(url);
   };
 
   const handleApplyCoupon = () => {
     if (!coupon.trim()) return;
     toast({
-      title: "Coupon validation comes with checkout",
-      description: `We'll verify "${coupon}" once you proceed to checkout.`,
+      title: "Coupon saved",
+      description: `"${coupon}" will be applied at checkout.`,
       variant: "info",
     });
   };

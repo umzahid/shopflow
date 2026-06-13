@@ -43,6 +43,40 @@ export interface Cart {
   subtotal: string;
 }
 
+export interface ShippingAddress {
+  line1: string;
+  line2?: string | null;
+  city: string;
+  state?: string | null;
+  postal_code: string;
+  country: string;  // ISO-3166-1 alpha-2
+}
+
+export interface CheckoutRequest {
+  shipping_address: ShippingAddress;
+  coupon_code?: string;
+}
+
+export interface OrderItemResponse {
+  id: string;
+  product_id: string;
+  quantity: number;
+  unit_price: string;
+}
+
+export interface Order {
+  id: string;
+  customer_id: string;
+  status: OrderStatus;
+  total_amount: string;
+  discount_amount: string;
+  shipping_address: ShippingAddress;
+  coupon_id: string | null;
+  created_at: string;
+  updated_at: string;
+  items: OrderItemResponse[];
+}
+
 export interface User {
   id: string;
   email: string;

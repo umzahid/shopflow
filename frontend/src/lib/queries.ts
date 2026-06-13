@@ -7,6 +7,7 @@ import {
 
 import { api } from "@/lib/api";
 import type {
+  Order,
   PaginatedProducts,
   PaginatedReviews,
   Product,
@@ -101,5 +102,19 @@ export function useProductSearch(
       ),
     enabled: q.trim().length > 0,
     staleTime: 30_000,
+  });
+}
+
+export const orderKeys = {
+  all: ["orders"] as const,
+  detail: (id: string) => [...orderKeys.all, "detail", id] as const,
+};
+
+export function useOrder(id: string): UseQueryResult<Order, Error> {
+  return useQuery({
+    queryKey: orderKeys.detail(id),
+    queryFn: () => api<Order>(`/orders/${id}`),
+    enabled: !!id,
+    staleTime: 10_000,
   });
 }
