@@ -59,7 +59,7 @@ export async function silentRefresh(): Promise<boolean> {
   return result !== null;
 }
 
-async function execRequest<T>(
+async function execRequest(
   url: string,
   opts: RequestOptions,
   token: string | null,
@@ -82,7 +82,7 @@ export async function api<T>(
 ): Promise<T> {
   const url = `${API_BASE}${path}`;
   const initialToken = useAuth.getState().accessToken;
-  let res = await execRequest<T>(url, opts, initialToken);
+  let res = await execRequest(url, opts, initialToken);
 
   // Try-once refresh on 401 (skip when we're inside the refresh call itself
   // and skip on the auth endpoints to avoid login-form thrash).
@@ -95,7 +95,7 @@ export async function api<T>(
   ) {
     const refreshed = await refreshToken();
     if (refreshed) {
-      res = await execRequest<T>(url, opts, refreshed.access_token);
+      res = await execRequest(url, opts, refreshed.access_token);
     } else {
       // Refresh failed — clear stale token so UI flips to signed-out state.
       useAuth.getState().clearAuth();

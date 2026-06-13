@@ -4,11 +4,15 @@ import { Nunito_Sans, Rubik } from "next/font/google";
 import { Providers } from "@/app/providers";
 import "./globals.css";
 
+// adjustFontFallback: false skips the size-adjust metric calc that
+// requires a network round-trip to fonts.gstatic.com — fixes the
+// "Failed to find font override values" warning in restricted/CI envs.
 const rubik = Rubik({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   variable: "--font-rubik",
   display: "swap",
+  adjustFontFallback: false,
 });
 
 const nunito = Nunito_Sans({
@@ -16,6 +20,7 @@ const nunito = Nunito_Sans({
   weight: ["300", "400", "500", "600", "700"],
   variable: "--font-nunito-sans",
   display: "swap",
+  adjustFontFallback: false,
 });
 
 export const metadata: Metadata = {

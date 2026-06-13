@@ -10,7 +10,14 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/Button";
@@ -60,6 +67,26 @@ function buildHref(p: ParsedFilters): string {
 }
 
 export default function ProductsPage() {
+  return (
+    <>
+      <Header />
+      <main
+        id="main"
+        className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8"
+      >
+        <Suspense fallback={<ProductsShell />}>
+          <ProductsView />
+        </Suspense>
+      </main>
+    </>
+  );
+}
+
+function ProductsShell() {
+  return <ProductCardSkeletonGrid count={8} />;
+}
+
+function ProductsView() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -85,13 +112,8 @@ export default function ProductsPage() {
 
   return (
     <>
-      <Header />
-      <main
-        id="main"
-        className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8"
-      >
-        {/* Breadcrumb */}
-        <nav aria-label="Breadcrumb" className="mb-6">
+      {/* Breadcrumb */}
+      <nav aria-label="Breadcrumb" className="mb-6">
           <ol className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <li>
               <Link
@@ -108,12 +130,11 @@ export default function ProductsPage() {
           </ol>
         </nav>
 
-        <PageBody
-          parsed={parsed}
-          onChange={(next) => router.replace(buildHref(next), { scroll: false })}
-          onAddToCart={onAddToCart}
-        />
-      </main>
+      <PageBody
+        parsed={parsed}
+        onChange={(next) => router.replace(buildHref(next), { scroll: false })}
+        onAddToCart={onAddToCart}
+      />
     </>
   );
 }

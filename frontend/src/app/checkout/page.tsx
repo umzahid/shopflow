@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { ChevronRight, Lock, Tag } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -39,7 +39,9 @@ export default function CheckoutPage() {
       <Header />
       <main id="main" className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
         <AuthGuard>
-          <CheckoutContent />
+          <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
+            <CheckoutContent />
+          </Suspense>
         </AuthGuard>
       </main>
     </>

@@ -23,6 +23,12 @@ services:
       NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1  # browser-side calls hit host, not Docker DNS
       WATCHPACK_POLLING: "true"
       CHOKIDAR_USEPOLLING: "true"
+      # next build's typecheck worker needs ~1GB heap; default ~256MB OOMs
+      NODE_OPTIONS: "--max-old-space-size=1536"
+    deploy:
+      resources:
+        limits:
+          memory: 2048m  # overrides base 512m for dev — `next build` typecheck needs the headroom
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O- http://localhost:3000/ >/dev/null || exit 1"]
       interval: 30s

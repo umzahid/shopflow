@@ -7,6 +7,8 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
+import { Suspense } from "react";
+
 import { AuthCard } from "@/components/AuthCard";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -26,6 +28,22 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export default function RegisterPage() {
+  return (
+    <Suspense fallback={<RegisterShell />}>
+      <RegisterForm />
+    </Suspense>
+  );
+}
+
+function RegisterShell() {
+  return (
+    <div className="mx-auto flex min-h-dvh max-w-md items-center justify-center px-4 py-12 sm:px-6">
+      <p className="text-sm text-muted-foreground">Loading…</p>
+    </div>
+  );
+}
+
+function RegisterForm() {
   const router = useRouter();
   const sp = useSearchParams();
   const next = sp.get("next") ?? "/";
