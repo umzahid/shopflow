@@ -8,22 +8,26 @@ import { cn } from "@/lib/utils";
 type Variant = "primary" | "secondary" | "ghost" | "danger";
 type Size = "sm" | "md" | "lg";
 
+// Per design-system/shopflow/MASTER.md:
+//   primary   = transaction CTA  (green) — "Add to cart", "Search", "Buy now"
+//   secondary = brand action     (purple, outlined) — "Become a merchant", links
+//   ghost     = chrome           (transparent) — icon-only header buttons
+//   danger    = destructive      (red)
 const variantStyles: Record<Variant, string> = {
   primary:
-    "bg-primary text-primary-foreground hover:opacity-90 focus-visible:ring-primary",
+    "bg-primary text-primary-foreground hover:bg-primary-hover focus-visible:ring-primary shadow-token",
   secondary:
-    "border border-border bg-background text-foreground hover:bg-muted focus-visible:ring-foreground",
+    "border-2 border-secondary bg-transparent text-secondary hover:bg-secondary hover:text-secondary-foreground focus-visible:ring-secondary",
   ghost:
-    "text-foreground hover:bg-muted focus-visible:ring-foreground",
+    "text-foreground hover:bg-muted focus-visible:ring-secondary",
   danger:
     "bg-danger text-danger-foreground hover:opacity-90 focus-visible:ring-danger",
 };
 
 const sizeStyles: Record<Size, string> = {
-  // Min touch target on mobile ≥ 44pt — heights tuned so even sm clears 36px.
-  sm: "h-9 px-3 text-sm gap-1.5",
-  md: "h-11 px-4 text-sm gap-2",
-  lg: "h-12 px-6 text-base gap-2",
+  sm: "h-11 px-4 text-sm gap-1.5",  // 44px — touch target floor (was 40 → bumped per a11y review)
+  md: "h-12 px-5 text-sm gap-2",    // 48px — comfortable default
+  lg: "h-14 px-6 text-base gap-2",  // 56px — hero CTA
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -56,7 +60,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       disabled={isDisabled}
       aria-busy={loading || undefined}
       className={cn(
-        "inline-flex items-center justify-center rounded-md font-medium",
+        "inline-flex items-center justify-center rounded-lg font-semibold cursor-pointer",
         "transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
         "focus-visible:ring-offset-background",
         "disabled:opacity-50 disabled:cursor-not-allowed",
@@ -67,7 +71,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       {...rest}
     >
       {loading ? (
-        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+        <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
       ) : (
         leftIcon
       )}

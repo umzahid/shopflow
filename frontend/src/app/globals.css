@@ -2,41 +2,93 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * ShopFlow tokens — derived from design-system/shopflow/MASTER.md
+ * Style: Vibrant & Block-based · Pattern: Marketplace / Directory
+ * Trust purple + transaction green; light & dark designed in tandem.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #0a0a0a;
-  --muted: #f5f5f5;
-  --muted-foreground: #6b7280;
-  --border: #e5e7eb;
-  --primary: #0f172a;
-  --primary-foreground: #fafafa;
+  --background: #faf5ff;
+  --foreground: #4c1d95;
+  --muted: #eceef9;
+  --muted-foreground: #6b21a8;
+  --surface: #ffffff;
+  --border: #ddd6fe;
+
+  /* Spec said green-500 #16A34A (3:1 vs white), but button labels are body
+   * text so they need 4.5:1. Dropped to green-700 (~5:1) and shifted hover
+   * to green-900 to keep the active-state lift. Same logic on the purple. */
+  --primary: #15803d;          /* transaction green — Add to cart, Search submit */
+  --primary-foreground: #ffffff;
+  --primary-hover: #14532d;
+
+  --secondary: #6d28d9;        /* trust purple — brand, outlined buttons, links */
+  --secondary-foreground: #ffffff;
+  --secondary-hover: #5b21b6;
+
+  --accent: #a78bfa;            /* soft purple — chips, decorative tags */
+  --accent-foreground: #2e1065;
+
   --danger: #dc2626;
   --danger-foreground: #ffffff;
-  --accent: #f59e0b;
-  --accent-foreground: #1f2937;
+
+  --ring: #7c3aed;
+
+  --shadow-sm: 0 1px 2px rgba(76, 29, 149, 0.06);
+  --shadow-md: 0 4px 6px rgba(76, 29, 149, 0.08), 0 2px 4px rgba(76, 29, 149, 0.04);
+  --shadow-lg: 0 10px 15px rgba(76, 29, 149, 0.10), 0 4px 6px rgba(76, 29, 149, 0.05);
+  --shadow-xl: 0 20px 25px rgba(76, 29, 149, 0.12);
 }
 
 .dark {
-  --background: #0a0a0a;
-  --foreground: #fafafa;
-  --muted: #1f1f1f;
-  --muted-foreground: #a1a1aa;
-  --border: #262626;
-  --primary: #fafafa;
-  --primary-foreground: #0a0a0a;
+  --background: #0f0a1f;
+  --foreground: #f5efff;
+  --muted: #1f1733;
+  --muted-foreground: #c4b5fd;
+  --surface: #1a1230;
+  --border: #2d2152;
+
+  --primary: #22c55e;          /* brighter green keeps contrast on dark surfaces */
+  --primary-foreground: #052e16;
+  --primary-hover: #16a34a;
+
+  --secondary: #a78bfa;        /* lift purple for dark-mode legibility */
+  --secondary-foreground: #1e1b4b;
+  --secondary-hover: #8b5cf6;
+
+  --accent: #c4b5fd;
+  --accent-foreground: #1e1b4b;
+
   --danger: #ef4444;
-  --danger-foreground: #ffffff;
-  --accent: #fbbf24;
-  --accent-foreground: #0a0a0a;
+  --danger-foreground: #1f0a0a;
+
+  --ring: #a78bfa;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5), 0 4px 6px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.55);
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
+  font-family: var(--font-nunito-sans), system-ui, -apple-system, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-rubik), system-ui, -apple-system, sans-serif;
+  letter-spacing: -0.01em;
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
   }
+  .shadow-token-sm { box-shadow: var(--shadow-sm); }
+  .shadow-token-md { box-shadow: var(--shadow-md); }
+  .shadow-token-lg { box-shadow: var(--shadow-lg); }
+  .shadow-token-xl { box-shadow: var(--shadow-xl); }
 }

@@ -1,23 +1,27 @@
 import type { Metadata } from "next";
-import localFont from "next/font/local";
+import { Nunito_Sans, Rubik } from "next/font/google";
 
 import { Providers } from "@/app/providers";
 import "./globals.css";
 
-const geistSans = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-geist-sans",
-  weight: "100 900",
+const rubik = Rubik({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-rubik",
+  display: "swap",
 });
-const geistMono = localFont({
-  src: "./fonts/GeistMonoVF.woff",
-  variable: "--font-geist-mono",
-  weight: "100 900",
+
+const nunito = Nunito_Sans({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+  variable: "--font-nunito-sans",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "ShopFlow",
-  description: "AI-powered e-commerce platform",
+  title: "ShopFlow — Marketplace for independent merchants",
+  description:
+    "Search thousands of products from independent merchants. Verified sellers, secure checkout, fast shipping.",
 };
 
 export default function RootLayout({
@@ -26,8 +30,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    // Inline script flips the .dark class before paint so the page never
-    // flashes the light palette for dark-mode users.
+    // Inline script flips .dark before paint so users who prefer dark never
+    // see a flash of light. Honors stored choice; falls back to OS preference.
     <html lang="en" suppressHydrationWarning>
       <head>
         <script
@@ -36,10 +40,10 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body className={`${rubik.variable} ${nunito.variable} font-sans antialiased`}>
         <a
           href="#main"
-          className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-primary-foreground"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-md focus:bg-secondary focus:px-3 focus:py-2 focus:text-secondary-foreground"
         >
           Skip to main content
         </a>
