@@ -92,3 +92,23 @@ h1, h2, h3, h4, h5, h6 {
   .shadow-token-lg { box-shadow: var(--shadow-lg); }
   .shadow-token-xl { box-shadow: var(--shadow-xl); }
 }
+
+/* Drawer slide-ins — 240ms ease-out per spec. Reduced-motion users get
+ * an instant snap-in instead of a slide. */
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+@keyframes slide-in-left {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+.animate-slide-in-right { animation: slide-in-right 240ms ease-out; }
+.animate-slide-in-left  { animation: slide-in-left  240ms ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-in-right,
+  .animate-slide-in-left {
+    animation: none;
+  }
+}

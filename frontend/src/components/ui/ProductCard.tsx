@@ -1,6 +1,7 @@
 "use client";
 
 import { ShoppingCart, Image as ImageIcon, Star } from "lucide-react";
+import Link from "next/link";
 
 import { Button } from "@/components/ui/Button";
 import { cn, formatPrice } from "@/lib/utils";
@@ -39,7 +40,11 @@ export function ProductCard({ product, onAddToCart, className }: ProductCardProp
         className,
       )}
     >
-      <div className="relative aspect-[4/3] w-full overflow-hidden rounded-lg bg-muted">
+      <Link
+        href={`/products/${product.id}`}
+        className="relative block aspect-[4/3] w-full overflow-hidden rounded-lg bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+        aria-label={`View ${product.title}`}
+      >
         {cover ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -65,11 +70,16 @@ export function ProductCard({ product, onAddToCart, className }: ProductCardProp
         >
           {badge.label}
         </span>
-      </div>
+      </Link>
 
       <div className="flex flex-1 flex-col gap-2">
         <h3 className="line-clamp-2 font-heading text-sm font-medium leading-snug text-foreground">
-          {product.title}
+          <Link
+            href={`/products/${product.id}`}
+            className="rounded-sm hover:text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+          >
+            {product.title}
+          </Link>
         </h3>
         {/* Rating placeholder until reviews API is wired client-side. Stars
             convey shape, not just color, satisfying color-not-only rule. */}

@@ -1,12 +1,13 @@
 import { cn } from "@/lib/utils";
 
-type Variant = "card" | "text" | "thumb" | "row";
+type Variant = "card" | "text" | "thumb" | "row" | "blank";
 
 const variantStyles: Record<Variant, string> = {
   card: "h-72 w-full rounded-lg",
   text: "h-4 w-full rounded",
   thumb: "h-12 w-12 rounded-md",
   row: "h-12 w-full rounded",
+  blank: "", // dimensions supplied entirely by className
 };
 
 interface SkeletonProps {

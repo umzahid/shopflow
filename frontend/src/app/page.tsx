@@ -10,13 +10,27 @@ import { TrustStrip } from "@/components/TrustStrip";
 import { Button } from "@/components/ui/Button";
 import { ProductCard } from "@/components/ui/ProductCard";
 import { ProductCardSkeletonGrid } from "@/components/ui/SkeletonLoader";
+import { useToast } from "@/components/ui/Toast";
 import { ApiError } from "@/lib/api";
 import { useProducts } from "@/lib/queries";
+import { useCart } from "@/store/cart";
+import type { Product } from "@/types/api";
 
 export default function Home() {
   const { data, isLoading, isError, error, refetch, isFetching } = useProducts({
     page_size: 12,
   });
+  const { toast } = useToast();
+  const add = useCart((s) => s.add);
+
+  const onAddToCart = (product: Product) => {
+    add(product, 1);
+    toast({
+      title: "Added to cart",
+      description: product.title,
+      variant: "success",
+    });
+  };
 
   const problem =
     isError && error instanceof ApiError ? error.problem : undefined;
@@ -130,7 +144,7 @@ export default function Home() {
           {!isLoading && !isError && data && data.items.length > 0 && (
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {data.items.map((p) => (
-                <ProductCard key={p.id} product={p} />
+                <ProductCard key={p.id} product={p} onAddToCart={onAddToCart} />
               ))}
             </div>
           )}

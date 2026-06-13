@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Store, ShoppingBag } from "lucide-react";
 
+import { CartButton } from "@/components/CartButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/Button";
 
@@ -25,6 +26,7 @@ export function Header() {
             Sell on ShopFlow
           </Link>
           <ThemeToggle />
+          <CartButton />
           <Button variant="secondary" size="sm" className="hidden sm:inline-flex">
             Sign in
           </Button>
