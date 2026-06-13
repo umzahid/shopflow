@@ -226,35 +226,73 @@ Target: **30+ entries** covering all 6 domains for full marks (45–50 pts).
 
 ### Entry 7
 - **Task Reference:** Domain 2 – Task 7 (Component library scaffold)
-- **Tool Used:** v0.dev
+- **Tool Used:** Claude Code (Claude Opus 4.7, 1M context)
 - **Prompt (verbatim):**
-- **Output Quality (1–5):**
+  > continue building
+  >
+  > (during the running `/ui-ux-pro-max` skill session — invoked the skill's `search.py --design-system --persist -p "ShopFlow"` to retrieve a marketplace/directory pattern + vibrant block-based style spec, then implemented the resulting tokens + 10 components incrementally over multiple turns.)
+- **Output Quality (1–5):** 4
 - **What You Changed:**
+  - Replaced the placeholder `frontend/Dockerfile` with a real multi-stage prod build and added a separate `frontend/Dockerfile.dev` for `next dev` hot reload via bind mount + named volumes for `node_modules` and `.next`.
+  - Scaffolded Next.js 14 (App Router, TS strict, Tailwind, ESLint, `--src-dir`, `@/*` alias) inside the container via `npx create-next-app@14`. Installed `@tanstack/react-query`, `zustand`, `react-hook-form` + `@hookform/resolvers` + `zod`, `lucide-react`, `clsx`, `tailwind-merge`.
+  - Built 7 of the 10 UI components in `src/components/ui/`: `Button`, `Input`, `Select`, `Drawer`, `Toast` + `ToastProvider`, `ProductCard`, `SkeletonLoader` (+ `ProductCardSkeletonGrid`). Plus narrow client components in `src/components/`: `Header`, `ThemeToggle`, `SearchBar`, `PopularTags`, `TrustStrip`, `MerchantCTA`, `CartButton`, `CartDrawer`, `RatingHistogramBar`, `AuthBoot`, `AuthCard`, `AuthGuard`, `AuthMenu`.
+  - 3 components deliberately deferred to Week 4: `Modal` (we have `Drawer`, which is sufficient for current flows), `DataTable` (merchant admin), `SLATimer` + `StatusBadge` (order ops), `RichTextEditor` (product editor) — all are merchant-side per the plan.
 - **What You Learned:**
+  - `lucide-react` icons take a `strokeWidth` prop. Default is 2; bumping to 2.5 makes small icons (h-3.5) read clearly without enlarging them. Keeping a consistent stroke across a hierarchy level matters for perceived polish.
+  - Native `<select>` styled with Tailwind is the right call for the sort dropdown — free keyboard nav, mobile system picker, screen-reader semantics. Only style the wrapper + chevron. Combobox primitives (Headless UI, Radix) buy nothing for plain enums and add bundle weight + a11y complexity.
 
 ### Entry 8
 - **Task Reference:** Domain 2 – Task 8 (TypeScript API types from OpenAPI spec)
-- **Tool Used:** Claude / openapi-typescript
+- **Tool Used:** Claude Code (hand-typed mirror of backend Pydantic schemas)
 - **Prompt (verbatim):**
-- **Output Quality (1–5):**
+  > Generated as part of "continue building" — the agent decided to hand-author `src/types/api.ts` rather than wire `openapi-typescript` because the backend already publishes Pydantic schemas under one file and the type surface is small.
+- **Output Quality (1–5):** 4
 - **What You Changed:**
+  - Wrote `src/types/api.ts` covering `Product`, `PaginatedProducts`, `CartItem`, `Cart`, `User`, `Token`, `RatingHistogram`, `Review`, `PaginatedReviews`, `ProblemDetail`, plus later additions `ShippingAddress`, `CheckoutRequest`, `OrderItemResponse`, `Order`, and the `ProductStatus` / `OrderStatus` / `UserRole` string-literal unions.
+  - All money fields typed as `string` (matching Pydantic `Decimal` → JSON string) so React-Query callers don't lose precision through `JSON.parse`.
 - **What You Learned:**
+  - Hand-mirroring works for ≤20 types but is fragile across schema drift. Plan for Week 5+ to add an `openapi-typescript` codegen step against `/openapi.json` so changes to backend schemas surface as TS errors in PRs. The current contract surface is small enough that the maintenance cost of codegen tooling outweighs its benefits today.
 
 ### Entry 9
-- **Task Reference:** Domain 2 – Task 9 (Storefront home + product listing pages)
-- **Tool Used:** Copilot / Claude
+- **Task Reference:** Domain 2 – Task 9 (Storefront home + product listing + product detail + cart + checkout + order pages)
+- **Tool Used:** Claude Code (Claude Opus 4.7, 1M context)
 - **Prompt (verbatim):**
-- **Output Quality (1–5):**
+  > complete /product and follow the sequence
+  >
+  > (later in the same session)
+  >
+  > continue building /project listing page
+- **Output Quality (1–5):** 4
 - **What You Changed:**
+  - `app/page.tsx` — marketplace-pattern home with hero search, popular-search chips, featured-products grid (`useProducts` hook), trust strip, "Apply to sell" merchant CTA, footer.
+  - `app/products/page.tsx` — listing with `useInfiniteQuery` cursor pagination + IntersectionObserver-driven auto-fetch, sidebar `FilterPanel` (price range), `Drawer` on mobile, native `<Select>` for sort, active-filter chips. URL params (`q`, `price_min`, `price_max`) are the single source of truth — readable, shareable, and survive reloads.
+  - `app/products/[id]/page.tsx` — detail with image gallery, qty stepper, stock badge driven by `(stock_qty<=0 | <=5 | >5)`, reviews section that pulls `useProductReviews` and renders a `RatingHistogramBar`.
+  - `app/cart/page.tsx` — two-column desktop layout (lines + sticky summary card), promo-code input, totals, "Proceed to checkout".
+  - `app/checkout/page.tsx` — RH Form + Zod shipping form (line1/2, city, state, postal_code, country ISO-2 with regex), optional coupon. Calls `syncCartToServer(lines)` to push local Zustand cart into the backend's Redis cart, then `POST /orders/checkout`. 400 with "coupon" in detail maps to a field error; 409 maps to a warning toast.
+  - `app/orders/[id]/page.tsx` — success hero, line items, shipping address, status pill driven by an exhaustive `Record<OrderStatus, …>` map (TS catches missing keys if the backend adds a status).
+  - `app/login/page.tsx` + `app/register/page.tsx` — RH Form + Zod, redirect to `?next=…`. RFC 7807 errors mapped to field-level messages: 401 → password field on login, 409 → email field on register.
+  - Auth infrastructure: `store/auth.ts` (memory-only access token; refresh cookie is httpOnly), `lib/api.ts` (rewritten to read from store, coalesce parallel 401s into one `/auth/refresh` via shared in-flight promise, retry once), `lib/auth.ts` (login/register/logout TanStack mutations), `components/AuthBoot.tsx` (silent refresh once on app boot), `components/AuthGuard.tsx` (client-side wrapper redirecting to `/login?next=…`).
 - **What You Learned:**
+  - Frontend's local Zustand cart is the source of truth, but the backend's `/orders/checkout` reads from Redis. The cleanest sync is `DELETE /cart` then `POST /cart/items` per line before `POST /orders/checkout`. Tried to push a single-call refactor and decided against it — the existing per-line endpoint already handles stock validation. Sequential is slower but acceptable for ≤50 items.
+  - `useSearchParams()` on a static page is a hard error in `next build` (Next 14): the entire page becomes CSR-only and breaks static export. The fix is to split the page into a small pre-renderable shell and a `<Suspense>`-wrapped inner component that consumes the params. Caught only at production build time, not in `next dev`.
 
 ### Entry 10
-- **Task Reference:** Domain 2 – Task 10 (Accessibility audit and fixes)
-- **Tool Used:** Claude / axe AI
+- **Task Reference:** Domain 2 – Task 10 (Accessibility audit and fixes via `/ui-ux-pro-max`)
+- **Tool Used:** Claude Code + `ui-ux-pro-max` skill (`scripts/search.py`)
 - **Prompt (verbatim):**
-- **Output Quality (1–5):**
+  > use /ui-ux-pro-max skill and redesign the page accordingly
+- **Output Quality (1–5):** 4
 - **What You Changed:**
+  - Ran `python3 ~/.claude/skills/ui-ux-pro-max/scripts/search.py "ecommerce storefront marketplace modern minimal multi-merchant" --design-system --persist -p "ShopFlow"` to generate `frontend/design-system/shopflow/MASTER.md` — pattern: Marketplace/Directory; style: Vibrant & Block-based; palette: trust purple `#7c3aed` + transaction green `#16a34a`; fonts: Rubik + Nunito Sans; spacing/shadow scale; anti-patterns.
+  - Repainted tokens: `globals.css` :root + .dark CSS variables; `tailwind.config.ts` exposes them as utility classes; `next/font/google` Rubik + Nunito Sans loaded with `adjustFontFallback: false`.
+  - Deviated from spec on the green and purple values to meet WCAG AA 4.5:1 for button labels (spec defaults hit ~3:1 and ~4.27:1). `#16a34a` → `#15803d` (5:1 with white text), `#7c3aed` → `#6d28d9` (~6.9:1). Documented the deviation in code comments.
+  - Marketplace pattern compositional changes: hero now centered on the search bar as the primary CTA (was a passive headline), with a chips row of popular searches under it. Trust strip and "Apply to sell" merchant CTA replaced the previous count badge. Inverted the merchant CTA button to white surface (green on purple panel was only ~1.4:1 — invisible).
+  - Touch-target audit lifted Button sm from 40px → 44px, md → 48px, lg → 56px; bumped header link from 40px → 44px; left chips at 36px on purpose with comments explaining adjacent-gap mitigation.
+  - A11y wiring: skip link, role=search/status/alert, aria-labelledby per landmark, aria-busy on loading buttons, motion-reduce on every transform, focus-visible rings everywhere, aria-live polite for cart counts and toast queue, breadcrumbs with aria-current="page".
 - **What You Learned:**
+  - The skill's CSV-driven design system is opinionated but treats accessibility as advisory — the spec acknowledges `#16a34a` only meets WCAG 3:1, intended for large text. Anything used for body text needs to be tightened manually. Worth running a contrast pass on every primary color before committing to it.
+  - `--persist -p "ShopFlow"` writes `design-system/shopflow/MASTER.md` and a `pages/` folder for per-page overrides. Read MASTER first when adding new pages so brand/spacing/elevation tokens stay consistent. Avoids the slow drift toward "every page invents its own scale."
+  - Layout-shifting hovers (e.g., `scale-105` on the card itself) are an anti-pattern flagged by the skill. Keeping the scale inside `overflow-hidden` (image-only) avoids reflowing siblings — a small detail that improves perceived quality on grid scrolls.
 
 ### Entry 11
 - **Task Reference:** Domain 2 – Task 11 (Storybook stories for all components)
