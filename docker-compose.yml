@@ -10,7 +10,7 @@ volumes:
 
 services:
   postgres:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15  # ships pgvector extension; needed for /products/search + Week 5 semantic search
     environment:
       POSTGRES_USER: shopflow
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}

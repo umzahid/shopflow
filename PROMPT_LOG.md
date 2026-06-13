@@ -199,6 +199,29 @@ Target: **30+ entries** covering all 6 domains for full marks (45–50 pts).
 
 ---
 
+### Entry 6b — Week 2 Day 3–5 (Reviews + Dashboards + Test Suite)
+- **Task Reference:** Domain 1 – Tasks 4–5 (Reviews API, Merchant/Admin dashboards, scale test suite to 80+ at ≥70% coverage)
+- **Tool Used:** Claude Code (Claude Opus 4.7, 1M context)
+- **Prompt (verbatim):**
+  > recall last session where you left
+  >
+  > yes please do that and continue with building
+- **Output Quality (1–5):** 4
+- **What You Changed:**
+  - **Verified pause-point fix.** Re-ran the coupon checkout end-to-end against the dev stack: empty-cart 400, invalid coupon 400 (`Coupon code not found`), `SAVE10` happy 201 ($100→$90), 2nd use 201, 3rd use 400 (`usage limit reached`). The UUID cast in `app/services/coupon.py:60` holds.
+  - **Built reviews module.** Added `app/schemas/review.py` (ReviewCreate/Update/Response + RatingHistogram + PaginatedReviews) and `app/api/reviews.py` with: public `GET /products/{id}/reviews` (cursor-paginated + rating histogram), `POST /products/{id}/reviews` (customer only, requires a `delivered` order containing the product, one-per-customer via `uq_review_product_customer` translated from `IntegrityError` → 409), `PATCH /reviews/{id}` (owner only), `DELETE /reviews/{id}` (owner or admin).
+  - **Built dashboards.** Added `app/schemas/dashboard.py` and two new routers: `app/api/merchant.py` (`GET /merchant/dashboard` — 7d/30d/90d revenue windows, order counts by status, top-5 products by revenue) and `GET /merchant/revenue-summary?start=&end=` (daily series, ≤365 days). `app/api/admin.py` exposes `GET /admin/platform-stats` (users, orders, revenue, status histogram). Revenue is recognized for orders in `(confirmed, shipped, delivered)`.
+  - **Bug fixed mid-build.** First `revenue-summary` call hit Postgres `GroupingError: column "orders.created_at" must appear in the GROUP BY clause`. SQLAlchemy parameterized `date_trunc('day', ...)` separately in SELECT vs GROUP BY, so Postgres saw two distinct expressions. Fixed by binding the expression once (`day_expr = func.date_trunc("day", Order.created_at)`) and reusing it in `.label()`, `.group_by()`, and `.order_by()`.
+  - **Scaled test suite from 14 → 121.** Added 7 unit files (pagination, order state machine, schema validation, config, problem-helper, cart helpers) and 5 integration files (products, cart, orders, reviews, dashboards), plus a shared `tests/integration/helpers.py` for register/login/create-product/checkout fixtures. Final count: 68 unit + 53 integration. Coverage: **77%** (target ≥70%), measured with `COVERAGE_FILE=/tmp/.coverage pytest --cov=app` since `/app` is read-only under the non-root `appuser` in the Dockerfile.
+  - **Wired routes in `app/main.py`.** Registered `reviews.router`, `merchant.router`, `admin.router` under the `/api/v1` prefix.
+- **What You Learned:**
+  - SQLAlchemy + asyncpg parameterize string literals like `'day'` independently per `func.date_trunc(...)` call. To Postgres these become distinct positional parameters and fail GROUP-BY equivalence — always bind such expressions to a Python variable when they appear in both `SELECT` and `GROUP BY`.
+  - `IntegrityError` from a Postgres unique constraint is the right RFC 7807 → 409 conversion point; cleaner than pre-checking with a SELECT (which would have a TOCTOU race anyway).
+  - This Docker setup has no volume mount on `backend/`, so every code change needs `docker compose up -d --build backend`. The `--reload` dev workflow would have saved several rebuild cycles — worth adding a `docker-compose.override.yml` later.
+  - Pytest-cov fails silently when `.coverage` can't be written. Setting `COVERAGE_FILE=/tmp/.coverage` is enough; no Dockerfile change needed.
+
+---
+
 ## Domain 2 — Frontend Engineering
 
 ### Entry 7

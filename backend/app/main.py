@@ -8,7 +8,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from app.api import auth
+from app.api import admin, auth, cart, merchant, orders, products, reviews
 from app.core.config import settings
 from app.core.redis import close_redis
 
@@ -95,3 +95,9 @@ async def health():
 
 # Routers
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(products.router, prefix="/api/v1")
+app.include_router(cart.router, prefix="/api/v1")
+app.include_router(orders.router, prefix="/api/v1")
+app.include_router(reviews.router, prefix="/api/v1")
+app.include_router(merchant.router, prefix="/api/v1")
+app.include_router(admin.router, prefix="/api/v1")
