@@ -10,3 +10,26 @@ services:
     environment:
       WATCHFILES_FORCE_POLLING: "true"  # Docker Desktop on macOS needs polling for reliable change detection
       PYTHONDONTWRITEBYTECODE: "1"      # avoid __pycache__ writes that could conflict with host
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules  # named volume so host's macOS files don't shadow Linux-built deps
+      - frontend_next:/app/.next                 # ditto for .next build artifacts
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1  # browser-side calls hit host, not Docker DNS
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3000/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 90s  # npm install on first run takes ~60s
+
+volumes:
+  frontend_node_modules:
+  frontend_next:

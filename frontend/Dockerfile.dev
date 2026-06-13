@@ -1,0 +1,13 @@
+# Dev image — used only via docker-compose.override.yml.
+# Installs deps once at container start, then runs `next dev` against the
+# host-mounted source.
+FROM node:20-alpine
+RUN apk add --no-cache wget
+
+WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
+EXPOSE 3000
+
+# package.json + lock are bind-mounted from the host at runtime; we install
+# fresh on container start so dep changes don't require an image rebuild.
+CMD ["sh", "-c", "npm install --no-audit --no-fund && npm run dev -- --hostname 0.0.0.0"]
