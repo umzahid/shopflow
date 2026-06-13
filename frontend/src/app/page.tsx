@@ -1,6 +1,8 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
+import { ArrowRight, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import { Header } from "@/components/Header";
 import { MerchantCTA } from "@/components/MerchantCTA";
@@ -17,6 +19,7 @@ import { useCart } from "@/store/cart";
 import type { Product } from "@/types/api";
 
 export default function Home() {
+  const router = useRouter();
   const { data, isLoading, isError, error, refetch, isFetching } = useProducts({
     page_size: 12,
   });
@@ -31,6 +34,9 @@ export default function Home() {
       variant: "success",
     });
   };
+
+  const goToSearch = (q: string) =>
+    router.push(`/products?q=${encodeURIComponent(q)}`);
 
   const problem =
     isError && error instanceof ApiError ? error.problem : undefined;
@@ -68,10 +74,10 @@ export default function Home() {
                 checkout, fast shipping, and reviews you can trust.
               </p>
               <div className="mt-2 w-full max-w-3xl">
-                <SearchBar />
+                <SearchBar onSearch={goToSearch} />
               </div>
               <div className="mt-1 w-full max-w-3xl">
-                <PopularTags />
+                <PopularTags onSelect={goToSearch} />
               </div>
             </div>
           </div>
@@ -94,15 +100,17 @@ export default function Home() {
                 Curated picks from across the marketplace.
               </p>
             </div>
-            {data && data.items.length > 0 && (
-              <p
-                className="text-sm font-medium text-muted-foreground tabular-nums"
-                aria-live="polite"
-              >
-                {data.items.length}{" "}
-                {data.items.length === 1 ? "product" : "products"}
-              </p>
-            )}
+            <Link
+              href="/products"
+              className="group inline-flex h-10 items-center gap-1.5 rounded-md text-sm font-semibold text-secondary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            >
+              See all products
+              <ArrowRight
+                className="h-4 w-4 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none"
+                aria-hidden="true"
+                strokeWidth={2}
+              />
+            </Link>
           </div>
 
           {isLoading && <ProductCardSkeletonGrid count={8} />}
