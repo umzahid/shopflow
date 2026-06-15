@@ -18,18 +18,18 @@
 
 | Role | Hex | CSS Variable |
 |------|-----|--------------|
-| Primary | `#7C3AED` | `--color-primary` |
-| On Primary | `#FFFFFF` | `--color-on-primary` |
-| Secondary | `#A78BFA` | `--color-secondary` |
-| Accent/CTA | `#16A34A` | `--color-accent` |
-| Background | `#FAF5FF` | `--color-background` |
-| Foreground | `#4C1D95` | `--color-foreground` |
-| Muted | `#ECEEF9` | `--color-muted` |
-| Border | `#DDD6FE` | `--color-border` |
-| Destructive | `#DC2626` | `--color-destructive` |
-| Ring | `#7C3AED` | `--color-ring` |
+| Primary (CTA) | `#15803D` | `--primary` |
+| On Primary | `#FFFFFF` | `--primary-foreground` |
+| Secondary (brand) | `#1D4ED8` | `--secondary` |
+| Accent | `#60A5FA` | `--accent` |
+| Background | `#F8FAFC` | `--background` |
+| Foreground | `#0F172A` | `--foreground` |
+| Muted | `#E2E8F0` | `--muted` |
+| Border | `#CBD5E1` | `--border` |
+| Destructive | `#DC2626` | `--danger` |
+| Ring | `#2563EB` | `--ring` |
 
-**Color Notes:** Trust purple + transaction green [Accent adjusted from #22C55E for WCAG 3:1]
+**Color Notes:** Trust blue + transaction green. Foreground is slate-900 (~16:1 on background) and secondary is blue-700 (~7:1 on white) — both well past WCAG AA. Migrated from trust-purple on 2026-06-14 for stronger text contrast and to keep the green CTA visually distinct from the brand color.
 
 ### Typography
 
@@ -73,7 +73,7 @@
 ```css
 /* Primary Button */
 .btn-primary {
-  background: #16A34A;
+  background: #15803D;
   color: white;
   padding: 12px 24px;
   border-radius: 8px;
@@ -90,8 +90,8 @@
 /* Secondary Button */
 .btn-secondary {
   background: transparent;
-  color: #7C3AED;
-  border: 2px solid #7C3AED;
+  color: #1D4ED8;
+  border: 2px solid #1D4ED8;
   padding: 12px 24px;
   border-radius: 8px;
   font-weight: 600;
@@ -104,7 +104,7 @@
 
 ```css
 .card {
-  background: #FAF5FF;
+  background: #F8FAFC;
   border-radius: 12px;
   padding: 24px;
   box-shadow: var(--shadow-md);
@@ -130,9 +130,9 @@
 }
 
 .input:focus {
-  border-color: #7C3AED;
+  border-color: #1D4ED8;
   outline: none;
-  box-shadow: 0 0 0 3px #7C3AED20;
+  box-shadow: 0 0 0 3px #1D4ED820;
 }
 ```
 

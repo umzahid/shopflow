@@ -5,64 +5,63 @@
 /*
  * ShopFlow tokens — derived from design-system/shopflow/MASTER.md
  * Style: Vibrant & Block-based · Pattern: Marketplace / Directory
- * Trust purple + transaction green; light & dark designed in tandem.
+ * Trust blue + transaction green; light & dark designed in tandem.
  */
 :root {
-  --background: #faf5ff;
-  --foreground: #4c1d95;
-  --muted: #eceef9;
-  --muted-foreground: #6b21a8;
+  --background: #f8fafc;       /* slate-50, cool neutral */
+  --foreground: #0f172a;       /* slate-900 — high-contrast body text (~16:1 on background) */
+  --muted: #e2e8f0;            /* slate-200 — chip / panel backdrop */
+  --muted-foreground: #475569; /* slate-600 — meets 4.5:1 on background */
   --surface: #ffffff;
-  --border: #ddd6fe;
+  --border: #cbd5e1;           /* slate-300 */
 
-  /* Spec said green-500 #16A34A (3:1 vs white), but button labels are body
-   * text so they need 4.5:1. Dropped to green-700 (~5:1) and shifted hover
-   * to green-900 to keep the active-state lift. Same logic on the purple. */
+  /* Greens stay for the transaction CTA. Blue replaces purple as brand. */
   --primary: #15803d;          /* transaction green — Add to cart, Search submit */
   --primary-foreground: #ffffff;
   --primary-hover: #14532d;
 
-  --secondary: #6d28d9;        /* trust purple — brand, outlined buttons, links */
+  --secondary: #1d4ed8;        /* blue-700 trust blue — brand, outlined buttons, links (~7:1 on white) */
   --secondary-foreground: #ffffff;
-  --secondary-hover: #5b21b6;
+  --secondary-hover: #1e3a8a;  /* blue-900 */
 
-  --accent: #a78bfa;            /* soft purple — chips, decorative tags */
-  --accent-foreground: #2e1065;
+  --accent: #60a5fa;            /* blue-400 — chips, decorative tags */
+  --accent-foreground: #0c1322;
 
   --danger: #dc2626;
   --danger-foreground: #ffffff;
 
-  --ring: #7c3aed;
+  --ring: #2563eb;              /* blue-600 — visible focus ring on white */
 
-  --shadow-sm: 0 1px 2px rgba(76, 29, 149, 0.06);
-  --shadow-md: 0 4px 6px rgba(76, 29, 149, 0.08), 0 2px 4px rgba(76, 29, 149, 0.04);
-  --shadow-lg: 0 10px 15px rgba(76, 29, 149, 0.10), 0 4px 6px rgba(76, 29, 149, 0.05);
-  --shadow-xl: 0 20px 25px rgba(76, 29, 149, 0.12);
+  /* Neutral slate-based shadows read cleaner on the cool background. */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 6px rgba(15, 23, 42, 0.08), 0 2px 4px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 10px 15px rgba(15, 23, 42, 0.10), 0 4px 6px rgba(15, 23, 42, 0.05);
+  --shadow-xl: 0 20px 25px rgba(15, 23, 42, 0.12);
 }
 
 .dark {
-  --background: #0f0a1f;
-  --foreground: #f5efff;
-  --muted: #1f1733;
-  --muted-foreground: #c4b5fd;
-  --surface: #1a1230;
-  --border: #2d2152;
+  --background: #0b1220;       /* near slate-950, slight blue tint */
+  --foreground: #f1f5f9;       /* slate-100 */
+  --muted: #1e293b;            /* slate-800 */
+  --muted-foreground: #94a3b8; /* slate-400 */
+  --surface: #0f172a;          /* slate-900 */
+  --border: #334155;           /* slate-700 */
 
   --primary: #22c55e;          /* brighter green keeps contrast on dark surfaces */
   --primary-foreground: #052e16;
   --primary-hover: #16a34a;
 
-  --secondary: #a78bfa;        /* lift purple for dark-mode legibility */
-  --secondary-foreground: #1e1b4b;
-  --secondary-hover: #8b5cf6;
+  --secondary: #60a5fa;        /* lifted blue-400 for dark-mode legibility */
+  --secondary-foreground: #0c1322;
+  --secondary-hover: #3b82f6;  /* blue-500 */
 
-  --accent: #c4b5fd;
-  --accent-foreground: #1e1b4b;
+  --accent: #93c5fd;            /* blue-300 */
+  --accent-foreground: #0c1322;
 
   --danger: #ef4444;
   --danger-foreground: #1f0a0a;
 
-  --ring: #a78bfa;
+  --ring: #60a5fa;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.3);
@@ -106,9 +105,43 @@ h1, h2, h3, h4, h5, h6 {
 .animate-slide-in-right { animation: slide-in-right 240ms ease-out; }
 .animate-slide-in-left  { animation: slide-in-left  240ms ease-out; }
 
+/* Entry + ambient motion for hero/cards. transform/opacity only — no layout shift. */
+@keyframes fade-up {
+  from { opacity: 0; transform: translate3d(0, 12px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes kenburns {
+  /* Subtle, looping zoom-and-drift for hero/feature imagery. */
+  0%   { transform: scale(1.04) translate3d(0, 0, 0); }
+  50%  { transform: scale(1.08) translate3d(-1%, -0.5%, 0); }
+  100% { transform: scale(1.04) translate3d(0, 0, 0); }
+}
+@keyframes blob-drift {
+  0%, 100% { transform: translate3d(-50%, 0, 0) scale(1); }
+  50%      { transform: translate3d(-50%, 2%, 0) scale(1.06); }
+}
+
+.animate-fade-up   { animation: fade-up 480ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.animate-fade-in   { animation: fade-in 320ms ease-out both; }
+.animate-kenburns  { animation: kenburns 18s ease-in-out infinite; }
+.animate-blob      { animation: blob-drift 10s ease-in-out infinite; }
+
+.delay-100 { animation-delay: 100ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-400 { animation-delay: 400ms; }
+
 @media (prefers-reduced-motion: reduce) {
   .animate-slide-in-right,
-  .animate-slide-in-left {
-    animation: none;
+  .animate-slide-in-left,
+  .animate-fade-up,
+  .animate-fade-in,
+  .animate-kenburns,
+  .animate-blob {
+    animation: none !important;
   }
 }

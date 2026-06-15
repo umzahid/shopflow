@@ -1,9 +1,12 @@
 "use client";
 
-import { ShoppingCart, Image as ImageIcon, Star } from "lucide-react";
+import { ShoppingCart, Star } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/Button";
+import { productCoverUrl } from "@/lib/images";
 import { cn, formatPrice } from "@/lib/utils";
 import type { Product } from "@/types/api";
 
@@ -25,7 +28,8 @@ function stockBadge(qty: number): { label: string; tone: string } {
 export function ProductCard({ product, onAddToCart, className }: ProductCardProps) {
   const badge = stockBadge(product.stock_qty);
   const outOfStock = product.stock_qty <= 0;
-  const cover = product.images[0];
+  const cover = productCoverUrl(product, { w: 600, h: 600 });
+  const [loaded, setLoaded] = useState(false);
 
   return (
     <article
@@ -33,8 +37,8 @@ export function ProductCard({ product, onAddToCart, className }: ProductCardProp
         // Lift on hover via translateY + shadow — does NOT shift sibling layout
         // (the card occupies a fixed grid cell), so safe per "layout-shifting hovers" rule.
         "group flex flex-col gap-3 rounded-xl border border-border bg-surface p-4",
-        "shadow-token transition-[box-shadow,transform]",
-        "hover:shadow-token-lg hover:-translate-y-0.5",
+        "shadow-token transition-[box-shadow,transform] duration-300",
+        "hover:shadow-token-lg hover:-translate-y-1",
         "motion-reduce:transition-none motion-reduce:hover:transform-none",
         "focus-within:shadow-token-lg",
         className,
@@ -45,26 +49,24 @@ export function ProductCard({ product, onAddToCart, className }: ProductCardProp
         className="relative block aspect-[4/3] w-full overflow-hidden rounded-lg bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
         aria-label={`View ${product.title}`}
       >
-        {cover ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={cover}
-            alt={product.title}
-            loading="lazy"
-            // scale-105 lives inside overflow-hidden — no layout shift outside the frame
-            className="h-full w-full object-cover transition-transform group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
-          />
-        ) : (
-          <div
-            className="flex h-full w-full items-center justify-center text-muted-foreground"
-            aria-hidden="true"
-          >
-            <ImageIcon className="h-10 w-10" strokeWidth={1.5} />
-          </div>
-        )}
+        <Image
+          src={cover}
+          alt={product.title}
+          fill
+          sizes="(min-width: 1280px) 22vw, (min-width: 1024px) 30vw, (min-width: 640px) 45vw, 90vw"
+          onLoad={() => setLoaded(true)}
+          // scale-110 lives inside overflow-hidden — no layout shift outside the frame.
+          // Image fades in once decoded so the swap from skeleton bg is smooth, not a snap.
+          className={cn(
+            "object-cover transition-[transform,opacity] duration-500 ease-out",
+            "group-hover:scale-110",
+            "motion-reduce:transition-none motion-reduce:group-hover:scale-100",
+            loaded ? "opacity-100" : "opacity-0",
+          )}
+        />
         <span
           className={cn(
-            "absolute right-2 top-2 rounded-full px-2.5 py-1 text-xs font-semibold",
+            "absolute right-2 top-2 rounded-full px-2.5 py-1 text-xs font-semibold shadow-token-sm",
             badge.tone,
           )}
         >

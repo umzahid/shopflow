@@ -2,12 +2,12 @@
 
 import {
   ChevronRight,
-  Image as ImageIcon,
   Minus,
   Plus,
   ShoppingCart,
   Star,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 import { useToast } from "@/components/ui/Toast";
 import { ApiError } from "@/lib/api";
+import { productGalleryUrls } from "@/lib/images";
 import { useProduct, useProductReviews } from "@/lib/queries";
 import { cn, formatPrice } from "@/lib/utils";
 import { useCart } from "@/store/cart";
@@ -31,7 +32,10 @@ export default function ProductDetailPage() {
   const add = useCart((s) => s.add);
   const [qty, setQty] = useState(1);
 
-  const cover = product?.images[0] ?? null;
+  const gallery = product
+    ? productGalleryUrls(product, { w: 1200, h: 1200 })
+    : [];
+  const [activeIdx, setActiveIdx] = useState(0);
   const outOfStock = product ? product.stock_qty <= 0 : false;
   const atCap = product ? qty >= product.stock_qty : false;
   const problem = isError && error instanceof ApiError ? error.problem : undefined;
@@ -102,39 +106,58 @@ export default function ProductDetailPage() {
         {product && (
           <>
             <div className="grid grid-cols-1 gap-10 lg:grid-cols-2">
-              {/* Gallery */}
-              <div className="flex flex-col gap-3">
-                <div className="relative aspect-square w-full overflow-hidden rounded-2xl border border-border bg-muted shadow-token-sm">
-                  {cover ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={cover}
-                      alt={product.title}
-                      className="h-full w-full object-cover"
+              {/* Gallery — main image cross-fades between thumbs; subtle
+                  hover-zoom on the active image (inside overflow-hidden,
+                  so no layout shift). */}
+              <div className="flex flex-col gap-3 animate-fade-up">
+                <div className="group relative aspect-square w-full overflow-hidden rounded-2xl border border-border bg-muted shadow-token">
+                  {gallery.map((src, i) => (
+                    <Image
+                      key={src}
+                      src={src}
+                      alt={i === 0 ? product.title : ""}
+                      fill
+                      sizes="(min-width: 1024px) 45vw, 90vw"
+                      priority={i === 0}
+                      className={cn(
+                        "object-cover transition-[opacity,transform] duration-500 ease-out",
+                        "group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100",
+                        i === activeIdx ? "opacity-100" : "opacity-0",
+                      )}
                     />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                      <ImageIcon
-                        aria-hidden="true"
-                        className="h-20 w-20"
-                        strokeWidth={1.25}
-                      />
-                    </div>
-                  )}
+                  ))}
                 </div>
-                {product.images.length > 1 && (
-                  <ul className="grid grid-cols-5 gap-2">
-                    {product.images.slice(0, 5).map((img, i) => (
-                      <li
-                        key={i}
-                        className="aspect-square overflow-hidden rounded-md border border-border bg-muted"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={img}
-                          alt=""
-                          className="h-full w-full object-cover"
-                        />
+                {gallery.length > 1 && (
+                  <ul
+                    role="tablist"
+                    aria-label="Product images"
+                    className="grid grid-cols-5 gap-2"
+                  >
+                    {gallery.slice(0, 5).map((img, i) => (
+                      <li key={img}>
+                        <button
+                          type="button"
+                          role="tab"
+                          aria-selected={i === activeIdx}
+                          aria-label={`Show image ${i + 1}`}
+                          onClick={() => setActiveIdx(i)}
+                          className={cn(
+                            "relative block aspect-square w-full cursor-pointer overflow-hidden rounded-md border-2 bg-muted transition-[border-color,transform] duration-200",
+                            "hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                            "motion-reduce:transition-none motion-reduce:hover:transform-none",
+                            i === activeIdx
+                              ? "border-secondary"
+                              : "border-border",
+                          )}
+                        >
+                          <Image
+                            src={img}
+                            alt=""
+                            fill
+                            sizes="80px"
+                            className="object-cover"
+                          />
+                        </button>
                       </li>
                     ))}
                   </ul>
