@@ -1,6 +1,4 @@
 """Order status state machine."""
-import pytest
-
 from app.models.models import OrderStatus
 from app.services.order_state import allowed_transitions, can_transition
 
