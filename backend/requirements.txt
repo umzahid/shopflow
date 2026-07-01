@@ -26,6 +26,8 @@ pandas==2.2.2
 # pred_contrib (TreeSHAP), so the `shap` package — and its numba/numpy pins —
 # is deliberately not required. LightGBM wheels are CPU-only and small.
 lightgbm==4.3.0
+# Merchant Copilot (Week 6) — Claude API tool-calling analytics assistant.
+anthropic==0.69.0
 pytest==8.2.0
 pytest-asyncio==0.23.6
 pytest-cov==5.0.0

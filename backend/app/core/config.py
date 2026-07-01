@@ -44,6 +44,10 @@ class Settings(BaseSettings):
 
     # Claude API (Week 6)
     ANTHROPIC_API_KEY: str = ""
+    # Merchant Copilot (Week 6)
+    COPILOT_MODEL: str = "claude-opus-4-8"
+    COPILOT_MAX_ITERATIONS: int = 5
+    COPILOT_EFFORT: str = "medium"
 
 
 @lru_cache
