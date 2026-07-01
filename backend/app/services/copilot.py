@@ -102,7 +102,10 @@ async def _anthropic_turn(messages, tools):  # pragma: no cover - needs anthropi
             tools=tools,
             tool_choice={"type": "auto"},
             thinking={"type": "adaptive"},
-            output_config={"effort": settings.COPILOT_EFFORT},
+            # output_config is not a named kwarg in anthropic==0.69.0 — pass it via
+            # extra_body so it reaches the wire regardless of SDK build. (Verified:
+            # 0.69.0 accepts `thinking` natively but rejects `output_config`.)
+            extra_body={"output_config": {"effort": settings.COPILOT_EFFORT}},
             messages=messages,
         )
     except RateLimitError as e:
