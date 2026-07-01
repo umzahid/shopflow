@@ -96,3 +96,47 @@ async def test_restock_alerts_runs(client):
     await create_product(client, mtoken, title="Stocked", stock=1000)
     result = await _run("get_restock_alerts", mid, {"lead_time_days": 7})
     assert "alerts" in result
+
+
+@pytest.mark.asyncio
+async def test_revenue_summary_excludes_other_merchants(client):
+    m1, mid1 = await register_merchant(client, "m-cp-rev-iso-a@e.com")
+    m2, mid2 = await register_merchant(client, "m-cp-rev-iso-b@e.com")
+    _, cid = await register_customer(client, "c-cp-rev-iso@e.com")
+    p1 = await create_product(client, m1, title="IsoRevA", price="10.00")
+    p2 = await create_product(client, m2, title="IsoRevB", price="99.00")
+    await _seed_delivered_order(p1["id"], cid, "10.00", 2)   # merchant 1 -> 20.00
+    await _seed_delivered_order(p2["id"], cid, "99.00", 5)   # merchant 2 -> 495.00
+    r1 = await _run("get_revenue_summary", mid1, {"period_days": 30})
+    r2 = await _run("get_revenue_summary", mid2, {"period_days": 30})
+    assert Decimal(r1["revenue"]) == Decimal("20.00")
+    assert Decimal(r2["revenue"]) == Decimal("495.00")
+
+
+@pytest.mark.asyncio
+async def test_top_products_scoped_to_merchant(client):
+    m1, mid1 = await register_merchant(client, "m-cp-top-a@e.com")
+    m2, _ = await register_merchant(client, "m-cp-top-b@e.com")
+    _, cid = await register_customer(client, "c-cp-top@e.com")
+    p1 = await create_product(client, m1, title="TopA", price="10.00")
+    p2 = await create_product(client, m2, title="TopB", price="10.00")
+    await _seed_delivered_order(p1["id"], cid, "10.00", 3)
+    await _seed_delivered_order(p2["id"], cid, "10.00", 7)  # other merchant, must not appear
+    result = await _run("get_top_products", mid1, {"limit": 5, "period_days": 30})
+    titles = [p["title"] for p in result["products"]]
+    assert titles == ["TopA"]
+    assert result["products"][0]["units_sold"] == 3
+
+
+@pytest.mark.asyncio
+async def test_order_stats_scoped_to_merchant(client):
+    m1, mid1 = await register_merchant(client, "m-cp-os-a@e.com")
+    m2, _ = await register_merchant(client, "m-cp-os-b@e.com")
+    _, cid = await register_customer(client, "c-cp-os@e.com")
+    p1 = await create_product(client, m1, title="OsA", price="10.00")
+    p2 = await create_product(client, m2, title="OsB", price="10.00")
+    await _seed_delivered_order(p1["id"], cid, "10.00", 1)   # merchant 1: 1 delivered order
+    await _seed_delivered_order(p2["id"], cid, "10.00", 1)   # merchant 2: 2 delivered orders
+    await _seed_delivered_order(p2["id"], cid, "10.00", 1)
+    result = await _run("get_order_stats", mid1, {})
+    assert result["by_status"].get("delivered") == 1

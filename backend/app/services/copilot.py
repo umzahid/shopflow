@@ -209,6 +209,7 @@ async def _get_top_products(db, merchant, args) -> dict:
     cutoff = func.now() - timedelta(days=period_days)
     rows = (await db.execute(
         select(
+            Product.id,
             Product.title,
             func.sum(OrderItem.quantity).label("units"),
             func.sum(OrderItem.quantity * OrderItem.unit_price).label("rev"),
@@ -220,12 +221,12 @@ async def _get_top_products(db, merchant, args) -> dict:
             Order.status.in_(REVENUE_STATUSES),
             Order.created_at >= cutoff,
         )
-        .group_by(Product.title)
+        .group_by(Product.id, Product.title)
         .order_by(func.sum(OrderItem.quantity * OrderItem.unit_price).desc())
         .limit(limit)
     )).all()
     return {"products": [
-        {"title": t, "units_sold": int(u), "revenue": str(Decimal(r))} for t, u, r in rows
+        {"title": t, "units_sold": int(u), "revenue": str(Decimal(r))} for _id, t, u, r in rows
     ]}
 
 
