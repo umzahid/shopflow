@@ -98,6 +98,15 @@ def _reset_copilot_llm():
     set_llm(None)
 
 
+@pytest.fixture(autouse=True)
+def _reset_description_generator():
+    """Reset the description generator swap hook after each test."""
+    yield
+    from app.services.descriptions import set_generator
+
+    set_generator(None)
+
+
 # ── Function-level: truncate all rows between tests ─────────────────────────
 
 @pytest.fixture(autouse=True)

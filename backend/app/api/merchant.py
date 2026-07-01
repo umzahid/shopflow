@@ -34,8 +34,10 @@ from app.schemas.dashboard import (
     RevenueWindows,
     TopProduct,
 )
+from app.schemas.descriptions import DescriptionRequest, DescriptionResponse
 from app.ml.forecast import forecast_product_demand
 from app.services import copilot as copilot_svc
+from app.services import descriptions as descriptions_svc
 from app.services.restock import get_restock_alerts
 
 router = APIRouter(prefix="/merchant", tags=["merchant"])
@@ -266,3 +268,27 @@ async def merchant_copilot(
             ToolCallTrace(tool=c.tool, input=c.input, result=c.result) for c in result.tool_calls
         ],
     )
+
+
+@router.post("/generate-description", response_model=DescriptionResponse)
+async def generate_description(
+    body: DescriptionRequest,
+    request: Request,
+    current_user: User = Depends(require_role(UserRole.merchant)),
+):
+    """Generate up to 3 marketing description variants from product attributes.
+
+    Stateless: returns text only — the merchant saves a chosen variant through the
+    normal product create/update flow.
+    """
+    if not body.title.strip():
+        raise _problem(
+            status.HTTP_400_BAD_REQUEST, "Bad Request",
+            "title must not be empty", request.url.path,
+        )
+    try:
+        variants = await descriptions_svc.generate_descriptions(body)
+    except descriptions_svc.DescriptionError as e:
+        title = "Service Unavailable" if e.status_code == status.HTTP_503_SERVICE_UNAVAILABLE else "Bad Gateway"
+        raise _problem(e.status_code, title, e.detail, request.url.path)
+    return DescriptionResponse(variants=variants)
