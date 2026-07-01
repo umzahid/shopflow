@@ -1,0 +1,2 @@
+# Placeholder so the Next.js standalone Docker build can COPY /app/public.
+# Add real static assets (favicon, robots.txt, images) here as needed.
