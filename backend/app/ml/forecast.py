@@ -14,11 +14,10 @@ into every CI run.
 from __future__ import annotations
 
 import json
-import math
 import os
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
-from typing import Awaitable, Callable
+from datetime import date, timedelta
+from typing import Callable
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession

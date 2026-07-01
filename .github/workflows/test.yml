@@ -28,7 +28,7 @@ jobs:
         run: pip install flake8
 
       - name: flake8
-        run: flake8 app/ tests/ --max-line-length=120 --extend-ignore=E501,W503
+        run: flake8 app/ tests/ --max-line-length=120 --extend-ignore=E501,W503,E203
 
   # ── 2. Frontend Lint ───────────────────────────────────────────────────────
   lint-frontend:
