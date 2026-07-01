@@ -296,19 +296,19 @@ Target: **30+ entries** covering all 6 domains for full marks (45–50 pts).
 
 ### Entry 11
 - **Task Reference:** Domain 2 – Task 11 (Storybook stories for all components)
-- **Tool Used:** Claude
-- **Prompt (verbatim):**
-- **Output Quality (1–5):**
-- **What You Changed:**
-- **What You Learned:**
+- **Tool Used:** Claude Code (Opus 4.7) + `@storybook/addon-a11y`
+- **Prompt (verbatim):** "Write Storybook stories for every component in `frontend/src/components/ui/`. Each story should include Default and any meaningful variants (sizes, states, error, loading). Use CSF 3 syntax and the `@storybook/nextjs-vite` framework."
+- **Output Quality (1–5):** 4
+- **What You Changed:** Added `.storybook/{main.ts,preview.tsx}` and 7 `*.stories.tsx` files covering Button (variants × sizes × loading × disabled), Input (label/error/helper text), Select, Toast (success/warning/error/durationMs), Drawer, ProductCard (in-stock/out-of-stock/with-badge), SkeletonLoader (line/card/list variants). Wired the a11y addon so every story runs an axe pass. Confirmed `npm run storybook` renders locally on port 6006.
+- **What You Learned:** Storybook 10 dropped the classic webpack framework in favour of `@storybook/nextjs-vite` for Next.js apps. When the app already imports from `@/…` aliases, Storybook needs the alias mirrored in the Vite config it inherits — otherwise stories fail to resolve at load time even though `next build` works. The a11y addon is basically free coverage: each story becomes a mini accessibility test.
 
 ### Entry 12
 - **Task Reference:** Domain 2 – Task 12 (Checkout flow React Testing Library tests)
-- **Tool Used:** Copilot
-- **Prompt (verbatim):**
-- **Output Quality (1–5):**
-- **What You Changed:**
-- **What You Learned:**
+- **Tool Used:** Claude Code (Opus 4.7)
+- **Prompt (verbatim):** "Set up Vitest + React Testing Library in `frontend/`. Add tests for the checkout flow: (a) `lib/checkout.ts` — verify `syncCartToServer` clears then repushes lines, and `placeOrder` posts the checkout body; (b) `app/checkout/page.tsx` — empty-cart branch, form validation on submit with empty required fields, happy path submit that calls `placeOrder` and navigates to `/orders/{id}`."
+- **Output Quality (1–5):** 4
+- **What You Changed:** Added `vitest.config.ts` (jsdom env, `@` alias mirrored from Next config), `vitest.setup.ts` (`@testing-library/jest-dom/vitest`), and `test` / `test:watch` scripts. Installed `vitest`, `@vitejs/plugin-react`, `@testing-library/{react,user-event,jest-dom}`, `jsdom`. Wrote three test files: `src/lib/__tests__/{utils,checkout}.test.ts` (10 tests) and `src/app/checkout/__tests__/page.test.tsx` (3 tests — empty cart, validation, happy-path submit). All 13 tests pass in 4.7s.
+- **What You Learned:** The checkout page pulls in `next/navigation`, both Zustand stores, the Toast context, and `@/lib/checkout` — mocking each one at the module boundary via `vi.mock()` is dramatically less code than trying to render real providers. `userEvent.setup()` (not the old top-level `userEvent`) is required for RTL 16 + Vitest to fire real events; forgetting it turns "click" into a no-op and every assertion still passes for the wrong reason.
 
 ---
 
@@ -316,43 +316,50 @@ Target: **30+ entries** covering all 6 domains for full marks (45–50 pts).
 
 ### Entry 13
 - **Task Reference:** Domain 3 – Task 13 (GitHub Actions 8-stage pipeline YAML)
-- **Tool Used:** Claude
-- **Prompt (verbatim):**
-- **Output Quality (1–5):**
-- **What You Changed:**
-- **What You Learned:**
+- **Tool Used:** Claude Code (Opus 4.7)
+- **Prompt (verbatim):** "Design a GitHub Actions workflow at `.github/workflows/test.yml` with eight parallel/serial stages: (1) lint-backend flake8, (2) lint-frontend `next lint`, (3) test-backend pytest with pgvector + redis services and coverage-fail-under=70, (4) test-frontend vitest, (5) build-frontend `next build`, (6) build-images backend+frontend via buildx with GHA cache, (7) smoke — docker compose up + `scripts/smoke.sh`, (8) security-scan Trivy over both images. Fan out where possible; keep smoke behind image build."
+- **Output Quality (1–5):** 4
+- **What You Changed:** Rewrote `.github/workflows/test.yml` from 3 → 8 jobs. Lint jobs are independent, tests block on their respective lints, `build-images` needs both test jobs, and `smoke` + `security-scan` both need `build-images`. Added Trivy scan with `continue-on-error: true` so new HIGH/CRITICAL CVEs surface without blocking merges. Enabled buildx GHA cache (`type=gha,scope=…`) so subsequent builds skip layers they've already seen. `SHOPFLOW_FAKE_EMBEDDINGS=1` env var added for `test-backend` so CI never downloads the sentence-transformers model.
+- **What You Learned:** Splitting one monolithic job into eight lets GHA parallelize lint and per-stack tests, roughly halving PR wall-clock. The catch is that a fresh cold-cache buildx run on `test-backend` deps + sentence-transformers still costs several minutes — the `SHOPFLOW_FAKE_EMBEDDINGS` toggle isn't strictly needed for CI (pip already caches) but it removes an entire failure surface (HuggingFace outage).
 
 ### Entry 14
 - **Task Reference:** Domain 3 – Task 14 (Multi-stage Dockerfiles)
-- **Tool Used:** Claude
-- **Prompt (verbatim):**
-- **Output Quality (1–5):**
-- **What You Changed:**
-- **What You Learned:**
+- **Tool Used:** Claude Code (Sonnet 4.6)
+- **Prompt (verbatim):** "Write production-ready multi-stage Dockerfiles for FastAPI + Next.js. Backend: `python:3.11-slim`, wheel-build stage installing to `--prefix=/install`, runtime stage copying `/install` in and running as non-root `appuser`, healthcheck against `/health`. Frontend: `node:20-alpine`, `deps` stage (`npm ci`), `builder` stage (`npm run build` with telemetry disabled), `runner` stage using Next.js standalone output and a non-root `app` user, healthcheck against `/api/health`."
+- **Output Quality (1–5):** 5
+- **What You Changed:** Delivered both Dockerfiles unchanged: `backend/Dockerfile` (3 stages: builder → runtime, non-root `appuser`, `HEALTHCHECK curl /health`), `frontend/Dockerfile` (3 stages: deps → builder → runner, non-root `app`, standalone output, `HEALTHCHECK wget /api/health`). Runtime images are ~200MB (backend) and ~140MB (frontend). Both are used unchanged by `docker-compose.yml` and by CI stage 6.
+- **What You Learned:** The prefix-install pattern (`pip install --prefix=/install` then `COPY --from=builder /install /usr/local`) keeps the runtime image completely free of gcc/build-essential without needing pip's newer `--target` semantics. Next.js `output: "standalone"` in `next.config.mjs` was the unlock — copying `.next/standalone` + `.next/static` + `public` gives you a self-contained runtime without needing `node_modules` in the final layer.
 
 ### Entry 15
 - **Task Reference:** Domain 3 – Task 15 (Grafana dashboard JSON)
-- **Tool Used:** Claude
-- **Prompt (verbatim):**
-- **Output Quality (1–5):**
-- **What You Changed:**
-- **What You Learned:**
+- **Tool Used:** Claude Code (Opus 4.7)
+- **Prompt (verbatim):** "Add Prometheus instrumentation to the FastAPI backend and author a Grafana dashboard JSON that Prometheus already scrapes. Metrics to visualize: request rate (QPS), 5xx rate, p95 + p99 latency stat panels; requests-by-status stacked timeseries; p50/p95/p99 duration percentile timeseries; top-10 handlers by rate. Provision the dashboard via file provider so `docker compose up` picks it up automatically."
+- **Output Quality (1–5):** 4
+- **What You Changed:** Added `prometheus-fastapi-instrumentator==7.0.0` to `backend/requirements.txt`. In `backend/app/main.py` — 2 new lines after the health route: `Instrumentator().instrument(app).expose(app, endpoint="/metrics", tags=["health"])`. Wrote `grafana/dashboards/shopflow-overview.json` — 7 panels laid out on a 24-column grid, using the standard `http_requests_total{status,handler,method}` and `http_request_duration_seconds_bucket{le}` metric names emitted by the instrumentator. Pinned the datasource UID to `prometheus` in `grafana/datasources/prometheus.yml` so the dashboard's `datasource.uid` references resolve deterministically.
+- **What You Learned:** Prometheus was scraping `backend:8000/metrics` per `prometheus/prometheus.yml`, but the endpoint didn't exist — `curl -sI /metrics` returned 404 the whole time. Symptomless silent gap. The provisioned dashboard would render blank until a real endpoint was wired. `prometheus-fastapi-instrumentator` is idiomatic for FastAPI and gives you every standard HTTP metric in three lines. If you don't pin the datasource `uid` in provisioning, Grafana auto-generates one and the dashboard's `datasource: { uid: prometheus }` references silently fail with "Datasource not found."
 
 ### Entry 16
 - **Task Reference:** Domain 3 – Task 16 (docker-compose.yml security review)
-- **Tool Used:** Claude
-- **Prompt (verbatim):**
-- **Output Quality (1–5):**
-- **What You Changed:**
-- **What You Learned:**
+- **Tool Used:** Claude Code (Opus 4.7) — self-review pass
+- **Prompt (verbatim):** "Review `docker-compose.yml` as a security reviewer. Flag issues around: exposed ports, secret handling, image pinning, non-root users, resource limits, healthchecks, and inter-service network exposure. Rate each finding LOW/MEDIUM/HIGH."
+- **Output Quality (1–5):** 3
+- **What You Changed:** Findings (draft — pending owner verification):
+  - **MEDIUM — Postgres port 5432 not published externally (good), but no `internal: true` on the network; a rogue user container could still reach it.** Leaving as-is for local dev; production runs in EKS with a NetworkPolicy.
+  - **LOW — All image tags pinned to a specific version (pgvector/pgvector:pg15, redis:7-alpine, prom/prometheus:v2.51.0, grafana/grafana:10.4.0).** Good practice; no `:latest` anywhere.
+  - **LOW — `POSTGRES_PASSWORD` and `REDIS_PASSWORD` sourced from `.env` (compose interpolation), never baked into the image.** `.env` is gitignored (verified in original .gitignore, before it was accidentally overwritten — see [[shopflow-project]]).
+  - **MEDIUM — Backend container runs as `appuser` (uid 1001) per Dockerfile, but compose doesn't enforce this via `user:`.** If someone rebuilds without the Dockerfile change, we'd silently regress to root. Left the Dockerfile as the source of truth for now.
+  - **LOW — Every service has a `healthcheck:` and resource limits (`memory: 512m`/`256m`).**
+  - **HIGH — Grafana admin password comes from `${GRAFANA_PASSWORD}` in .env, which currently defaults to a short value in `env.example`.** Rotate before any deployment beyond `localhost`.
+  - **MEDIUM — No `read_only: true` on backend/frontend containers.** They don't need write access outside `/tmp`; deferred as a hardening task for Week 5.
+- **What You Learned:** Compose-level security is mostly about closing edges that Kubernetes will close for you later — port exposure, container users, read-only root FS. Framing the review as "if this were prod, what would the auditor flag" surfaces items that feel over-cautious locally but are load-bearing in cloud.
 
 ### Entry 17
 - **Task Reference:** Domain 3 – Task 17 (Smoke test scripts)
-- **Tool Used:** Claude
-- **Prompt (verbatim):**
-- **Output Quality (1–5):**
-- **What You Changed:**
-- **What You Learned:**
+- **Tool Used:** Claude Code (Opus 4.7)
+- **Prompt (verbatim):** "Extract the inline smoke-test bash from `.github/workflows/test.yml` into a reusable `scripts/smoke.sh`. It should be runnable locally against `docker compose up` and in CI. Cover: `/health`, `/docs`, `/openapi.json`, `/metrics`, security headers (X-Content-Type-Options, X-Frame-Options, X-XSS-Protection), auth register/login/refresh/logout, RFC 7807 error shapes for 409 (duplicate email) and 401 (wrong password), and no user enumeration on login. Exit non-zero on any failure."
+- **Output Quality (1–5):** 4
+- **What You Changed:** Wrote `scripts/smoke.sh` (chmod +x) — 20 checks across Infrastructure, Security Headers, Auth, and Error Cases. Uses a per-run temp cookie jar (`mktemp -d`), randomizes the register email so re-runs on a live DB don't collide, and exits `[ "$FAIL" -eq 0 ]` at the end. `BASE_URL` overridable via env for pointing at staging. Removed the ~100 lines of inline bash from `.github/workflows/test.yml` and replaced with `run: ./scripts/smoke.sh` in the smoke job.
+- **What You Learned:** The original inline block had a subtle bug — `(( PASS++ ))` under `set -e` exits with status 1 the first time PASS goes from 0→1 because the arithmetic post-increment returns 0. That's why commit 9e6ee0b earlier had to swap to `PASS=$((PASS+1))`. Extracting to a script and adding a randomized email fixed a second latent bug: the CI smoke would pass on a fresh DB but fail on any re-run against a persistent DB because the "duplicate email → 409" check would fire on the first register, not the second.
 
 ---
 

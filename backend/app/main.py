@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import HTTPException as FastAPIHTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -91,6 +92,12 @@ async def global_exception_handler(request: Request, exc: Exception):
 @app.get("/health", tags=["health"])
 async def health():
     return {"status": "ok", "service": settings.APP_NAME}
+
+
+# Prometheus /metrics endpoint — scraped by prometheus.yml every 15s.
+# Exposes http_requests_total, http_request_duration_seconds_*, and the
+# process_* defaults that the Grafana dashboard queries.
+Instrumentator().instrument(app).expose(app, endpoint="/metrics", tags=["health"])
 
 
 # Routers

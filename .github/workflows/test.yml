@@ -1,4 +1,4 @@
-name: Backend Test & API Smoke
+name: ShopFlow CI
 
 on:
   push:
@@ -7,9 +7,9 @@ on:
     branches: [main]
 
 jobs:
-  # ── 1. Lint ────────────────────────────────────────────────────────────────
-  lint:
-    name: Lint
+  # ── 1. Backend Lint ────────────────────────────────────────────────────────
+  lint-backend:
+    name: Lint (backend)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -30,11 +30,31 @@ jobs:
       - name: flake8
         run: flake8 app/ tests/ --max-line-length=120 --extend-ignore=E501,W503
 
-  # ── 2. Unit + Integration Tests ────────────────────────────────────────────
-  test:
+  # ── 2. Frontend Lint ───────────────────────────────────────────────────────
+  lint-frontend:
+    name: Lint (frontend)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+
+  # ── 3. Backend Tests ───────────────────────────────────────────────────────
+  test-backend:
     name: Pytest (unit + integration)
     runs-on: ubuntu-latest
-    needs: lint
+    needs: lint-backend
     defaults:
       run:
         working-directory: backend
@@ -76,6 +96,7 @@ jobs:
       APP_ENV: test
       DEBUG: "false"
       CORS_ORIGINS: '["http://localhost:3000"]'
+      SHOPFLOW_FAKE_EMBEDDINGS: "1"
 
     steps:
       - uses: actions/checkout@v4
@@ -114,11 +135,86 @@ jobs:
           name: coverage-report
           path: backend/coverage.xml
 
-  # ── 3. API Smoke Tests ─────────────────────────────────────────────────────
+  # ── 4. Frontend Tests ──────────────────────────────────────────────────────
+  test-frontend:
+    name: Vitest (frontend)
+    runs-on: ubuntu-latest
+    needs: lint-frontend
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+      - run: npm test
+
+  # ── 5. Frontend Build ──────────────────────────────────────────────────────
+  build-frontend:
+    name: Next.js build
+    runs-on: ubuntu-latest
+    needs: test-frontend
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+      - run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
+  # ── 6. Docker Image Build ──────────────────────────────────────────────────
+  build-images:
+    name: Docker images build
+    runs-on: ubuntu-latest
+    needs: [test-backend, test-frontend]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: false
+          load: true
+          tags: shopflow-backend:ci
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,scope=backend,mode=max
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: false
+          load: true
+          tags: shopflow-frontend:ci
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,scope=frontend,mode=max
+
+  # ── 7. API Smoke Tests ─────────────────────────────────────────────────────
   smoke:
     name: API Smoke Tests
     runs-on: ubuntu-latest
-    needs: test
+    needs: build-images
 
     steps:
       - uses: actions/checkout@v4
@@ -163,80 +259,7 @@ jobs:
         run: docker compose exec -T backend alembic upgrade head
 
       - name: Run API smoke tests
-        run: |
-          BASE="http://localhost:8000/api/v1"
-          PASS=0; FAIL=0
-
-          check() {
-            local name="$1" expected="$2" actual="$3"
-            if echo "$actual" | grep -qE "$expected"; then
-              echo "  ✅ PASS | $name"
-              PASS=$((PASS+1))
-            else
-              echo "  ❌ FAIL | $name"
-              echo "     expected: $expected"
-              echo "     got:      $(echo $actual | cut -c1-200)"
-              FAIL=$((FAIL+1))
-            fi
-          }
-
-          echo "=== Infrastructure ==="
-          check "Health endpoint" "ok" "$(curl -sf http://localhost:8000/health)"
-          check "Swagger docs" "200" "$(curl -so /dev/null -w '%{http_code}' http://localhost:8000/docs)"
-          check "OpenAPI JSON" "openapi" "$(curl -sf http://localhost:8000/openapi.json | head -c 100)"
-
-          echo "=== Security Headers ==="
-          HDRS=$(curl -sI -X GET http://localhost:8000/health)
-          check "X-Content-Type-Options" "nosniff" "$HDRS"
-          check "X-Frame-Options" "DENY" "$HDRS"
-          check "X-XSS-Protection" "xss" "$HDRS"
-
-          echo "=== Auth: Register ==="
-          R=$(curl -s -c /tmp/cook.txt -o /tmp/r.json -w "%{http_code}" -X POST "$BASE/auth/register" \
-            -H "Content-Type: application/json" \
-            -d '{"email":"smoke@test.io","password":"Password123","role":"customer"}')
-          B=$(cat /tmp/r.json)
-          check "Register → 201" "201" "$R"
-          check "Returns access_token" "access_token" "$B"
-          check "No password_hash exposed" "200" "$(echo $B | grep -v password_hash && echo 200)"
-
-          echo "=== Auth: Login ==="
-          R=$(curl -s -c /tmp/cook2.txt -o /tmp/r.json -w "%{http_code}" -X POST "$BASE/auth/login" \
-            -H "Content-Type: application/json" \
-            -d '{"email":"smoke@test.io","password":"Password123"}')
-          check "Login → 200" "200" "$R"
-          check "Login returns token" "access_token" "$(cat /tmp/r.json)"
-
-          echo "=== Auth: Error Cases ==="
-          R=$(curl -s -o /tmp/r.json -w "%{http_code}" -X POST "$BASE/auth/register" \
-            -H "Content-Type: application/json" \
-            -d '{"email":"smoke@test.io","password":"Password123"}')
-          check "Duplicate email → 409" "409" "$R"
-          check "409 is RFC 7807" "type" "$(cat /tmp/r.json)"
-
-          R=$(curl -s -o /tmp/r.json -w "%{http_code}" -X POST "$BASE/auth/login" \
-            -H "Content-Type: application/json" \
-            -d '{"email":"smoke@test.io","password":"wrongpass"}')
-          check "Wrong password → 401" "401" "$R"
-          check "No user enumeration" "Invalid credentials" "$(cat /tmp/r.json)"
-
-          echo "=== Auth: Refresh & Logout ==="
-          R=$(curl -s -b /tmp/cook2.txt -c /tmp/cook2.txt -o /tmp/r.json -w "%{http_code}" \
-            -X POST "$BASE/auth/refresh")
-          check "Refresh → 200" "200" "$R"
-          check "Refresh issues new token" "access_token" "$(cat /tmp/r.json)"
-
-          R=$(curl -s -b /tmp/cook2.txt -o /tmp/r.json -w "%{http_code}" -X DELETE "$BASE/auth/logout")
-          check "Logout → 204" "204" "$R"
-          R=$(curl -s -b /tmp/cook2.txt -o /tmp/r.json -w "%{http_code}" -X POST "$BASE/auth/refresh")
-          check "Token revoked after logout → 401" "401" "$R"
-
-          echo ""
-          echo "══════════════════════════════════"
-          echo "TOTAL: $((PASS+FAIL)) | ✅ $PASS passed | ❌ $FAIL failed"
-          echo "══════════════════════════════════"
-
-          [ $FAIL -eq 0 ] || exit 1
+        run: ./scripts/smoke.sh
 
       - name: Show backend logs on failure
         if: failure()
@@ -245,3 +268,50 @@ jobs:
       - name: Tear down
         if: always()
         run: docker compose down -v
+
+  # ── 8. Container Security Scan ─────────────────────────────────────────────
+  security-scan:
+    name: Trivy container scan
+    runs-on: ubuntu-latest
+    needs: build-images
+    # Don't block PRs on new vulns — reports go to the Security tab.
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image (local)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: false
+          load: true
+          tags: shopflow-backend:scan
+          cache-from: type=gha,scope=backend
+
+      - name: Build frontend image (local)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: false
+          load: true
+          tags: shopflow-frontend:scan
+          cache-from: type=gha,scope=frontend
+
+      - name: Scan backend image
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: shopflow-backend:scan
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: "0"
+
+      - name: Scan frontend image
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: shopflow-frontend:scan
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: "0"
