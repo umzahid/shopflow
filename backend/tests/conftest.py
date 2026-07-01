@@ -77,6 +77,17 @@ def _use_fake_forecaster():
     set_forecaster(None)
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _use_fake_fraud_scorer():
+    """Swap in the deterministic heuristic fraud scorer so tests never need a
+    trained LightGBM artifact. Same pattern as the encoder/forecaster swaps."""
+    from app.ml.fraud import _fake_score, set_scorer
+
+    set_scorer(_fake_score)
+    yield
+    set_scorer(None)
+
+
 # ── Function-level: truncate all rows between tests ─────────────────────────
 
 @pytest.fixture(autouse=True)

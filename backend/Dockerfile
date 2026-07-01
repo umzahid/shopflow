@@ -11,7 +11,9 @@ RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 # Stage 2: production — lean final image
 FROM python:3.11-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends libpq-dev curl && rm -rf /var/lib/apt/lists/*
+# libgomp1: OpenMP runtime required by LightGBM (fraud scoring). Without it the
+# LightGBM shared lib fails to load and any real-model score raises at checkout.
+RUN apt-get update && apt-get install -y --no-install-recommends libpq-dev libgomp1 curl && rm -rf /var/lib/apt/lists/*
 
 # Non-root user
 RUN useradd -m -u 1001 appuser

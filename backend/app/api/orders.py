@@ -34,6 +34,7 @@ from app.schemas.order import (
 )
 from app.services import cart as cart_svc
 from app.services import coupon as coupon_svc
+from app.services import fraud as fraud_svc
 from app.services.order_state import allowed_transitions, can_transition
 
 router = APIRouter(prefix="/orders", tags=["orders"])
@@ -111,14 +112,29 @@ async def checkout(
 
     total = subtotal - discount
 
+    # Fraud scoring — computed before the order is persisted so the prior-history
+    # features exclude this in-flight order. A flagged order lands in
+    # pending_review rather than pending, so it never auto-progresses to fulfilment.
+    line_items = [(products_by_id[pid].price, line["qty"]) for pid, line in cart_raw.items()]
+    _, fraud = await fraud_svc.assess_order(
+        db,
+        customer=current_user,
+        order_total=total,
+        discount_amount=discount,
+        line_items=line_items,
+    )
+    order_status = OrderStatus.pending_review if fraud.is_flagged else OrderStatus.pending
+
     # Decrement stock + snapshot prices into OrderItems in the same transaction
     order = Order(
         customer_id=current_user.id,
-        status=OrderStatus.pending,
+        status=order_status,
         total_amount=total,
         discount_amount=discount,
         shipping_address=body.shipping_address.model_dump(),
         coupon_id=coupon_id,
+        fraud_score=fraud.score,
+        fraud_reasons=fraud.reasons,
     )
     db.add(order)
     await db.flush()  # need order.id

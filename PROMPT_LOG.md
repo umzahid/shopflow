@@ -454,11 +454,21 @@ Target: **30+ entries** covering all 6 domains for full marks (45–50 pts).
 
 ### Entry 25
 - **Task Reference:** Domain 5 – Task 25 (Fraud detection feature set and model design)
-- **Tool Used:** Claude
-- **Prompt (verbatim):**
-- **Output Quality (1–5):**
+- **Tool Used:** Claude Code (Opus 4.8)
+- **Prompt (verbatim):** "remember last session and continue" → scoped to Week 6, full LightGBM fraud pipeline (feature engineering + model wrapper + synthetic training + SHAP reasons + checkout integration + tests).
+- **Output Quality (1–5):** 4
 - **What You Changed:**
-- **What You Learned:**
+  - `backend/requirements.txt` — added `lightgbm==4.3.0`. Deliberately did **not** add `shap`: LightGBM's `Booster.predict(X, pred_contrib=True)` gives native TreeSHAP contributions, so the `shap`→`numba` chain (and its tighter numpy pin) is avoided on an already CUDA/disk-sensitive image.
+  - `backend/app/ml/fraud.py` — model wrapper mirroring the forecast/embedding pattern. `FEATURE_NAMES` (10-feature ordered contract), `FraudFeatures`/`FraudPrediction` dataclasses, `_fake_score` deterministic heuristic (logistic over weighted contributions, centred so raw≈2.0 → 0.5), `_model_score` (lazy `lgb.Booster` load + native `pred_contrib` → top-3 positive-contribution reasons), `set_scorer()` swap hook, `SHOPFLOW_FAKE_FRAUD=1` toggle, `SHOPFLOW_FRAUD_MODEL_PATH`/`SHOPFLOW_FRAUD_THRESHOLD` env config. Missing artifact → logged warning + heuristic fallback (never hard-fails checkout).
+  - `backend/app/services/fraud.py` — `extract_features()` (prior revenue-order count, prior cancellations, account-age hours, discount ratio, off-hours flag, item aggregates) + `assess_order()`. Runs before the order is persisted so prior-history counts exclude the in-flight order.
+  - `backend/app/api/orders.py` — checkout hook: score the order, set `fraud_score`/`fraud_reasons`, route flagged orders to `pending_review` instead of `pending`.
+  - `backend/app/schemas/order.py` — exposed `fraud_score`/`fraud_reasons` on `OrderResponse` (so admins see them via `GET /orders?status=pending_review`).
+  - `backend/app/scripts/train_fraud_model.py` — synthetic labeled-order generator (planted signal: new+thin-history accounts, high value, heavy discount, off-hours) → `lgb.train` binary classifier → rank-based AUC + confusion matrix (no sklearn dep) → saves booster to `app/ml/artifacts/fraud_model.txt`.
+  - `backend/Dockerfile` — added `libgomp1` (LightGBM's OpenMP runtime) to the production stage.
+  - `backend/tests/conftest.py` — session-scoped `_use_fake_fraud_scorer` fixture (same pattern as encoder/forecaster swaps).
+  - `backend/tests/unit/test_fraud_scoring.py` (7 tests) + `backend/tests/integration/test_fraud.py` (4 tests). Full suite 151 passed, coverage 76.96% (gate 70%), flake8 clean.
+  - `.gitignore` — ignore `backend/app/ml/artifacts/*.txt` (regenerable booster); kept dir via `.gitkeep`.
+- **What You Learned:** LightGBM ships TreeSHAP internally via `pred_contrib=True` (last column is the bias/expected-value term) — pulling the standalone `shap` package is unnecessary for per-prediction attributions and would have added a heavy numba dependency. The deployment gotcha: LightGBM's C library needs `libgomp.so.1` at import; `python:3.11-slim` doesn't ship it, so a trained-model deploy would 500 at checkout without `libgomp1` in the image. The scorer's design payoff is the heuristic fallback + swap-hook: tests, CI, and any install lacking a trained artifact degrade gracefully to a deterministic rule-based score instead of crashing — the model becomes an upgrade, not a hard dependency.
 
 ### Entry 26
 - **Task Reference:** Domain 5 – Task 26 (Merchant Copilot with tool calling)

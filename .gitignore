@@ -40,6 +40,9 @@ crash.log
 # ML artefacts
 backend/models/*.pkl
 backend/data/*.csv
+# Trained fraud booster — regenerable via `python -m app.scripts.train_fraud_model`;
+# keep the dir (.gitkeep) but not the binary model.
+backend/app/ml/artifacts/*.txt
 
 # macOS
 .DS_Store

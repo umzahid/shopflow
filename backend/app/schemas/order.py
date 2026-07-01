@@ -37,6 +37,8 @@ class OrderResponse(BaseModel):
     discount_amount: Decimal
     shipping_address: dict
     coupon_id: str | None
+    fraud_score: Decimal | None = None
+    fraud_reasons: list[str] | None = None
     created_at: datetime
     updated_at: datetime
     items: list[OrderItemResponse]
