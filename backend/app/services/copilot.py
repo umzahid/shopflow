@@ -14,12 +14,17 @@ import asyncio
 import json
 import os
 from dataclasses import dataclass, field
+from datetime import timedelta
+from decimal import Decimal
 from typing import Awaitable, Callable
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.models.models import User
+from app.models.models import Order, OrderItem, OrderStatus, Product, User
+from app.ml.forecast import forecast_product_demand
+from app.services.restock import get_restock_alerts as _restock_alerts
 
 SYSTEM_PROMPT = (
     "You are ShopFlow Merchant Copilot, a read-only analytics assistant for a "
@@ -176,3 +181,149 @@ async def answer_question(db: AsyncSession, merchant: User, question: str) -> Co
         )
 
     return CopilotAnswer(answer=answer_text, tool_calls=trace)
+
+
+REVENUE_STATUSES = (OrderStatus.confirmed, OrderStatus.shipped, OrderStatus.delivered)
+
+
+async def _get_revenue_summary(db, merchant, args) -> dict:
+    period_days = int(args.get("period_days", 30))
+    cutoff = func.now() - timedelta(days=period_days)
+    stmt = (
+        select(func.coalesce(func.sum(OrderItem.quantity * OrderItem.unit_price), 0))
+        .join(Order, Order.id == OrderItem.order_id)
+        .join(Product, Product.id == OrderItem.product_id)
+        .where(
+            Product.merchant_id == merchant.id,
+            Order.status.in_(REVENUE_STATUSES),
+            Order.created_at >= cutoff,
+        )
+    )
+    amount = (await db.execute(stmt)).scalar() or 0
+    return {"period_days": period_days, "revenue": str(Decimal(amount))}
+
+
+async def _get_top_products(db, merchant, args) -> dict:
+    limit = int(args.get("limit", 5))
+    period_days = int(args.get("period_days", 30))
+    cutoff = func.now() - timedelta(days=period_days)
+    rows = (await db.execute(
+        select(
+            Product.title,
+            func.sum(OrderItem.quantity).label("units"),
+            func.sum(OrderItem.quantity * OrderItem.unit_price).label("rev"),
+        )
+        .join(OrderItem, OrderItem.product_id == Product.id)
+        .join(Order, Order.id == OrderItem.order_id)
+        .where(
+            Product.merchant_id == merchant.id,
+            Order.status.in_(REVENUE_STATUSES),
+            Order.created_at >= cutoff,
+        )
+        .group_by(Product.title)
+        .order_by(func.sum(OrderItem.quantity * OrderItem.unit_price).desc())
+        .limit(limit)
+    )).all()
+    return {"products": [
+        {"title": t, "units_sold": int(u), "revenue": str(Decimal(r))} for t, u, r in rows
+    ]}
+
+
+async def _get_order_stats(db, merchant, args) -> dict:
+    rows = (await db.execute(
+        select(Order.status, func.count(func.distinct(Order.id)))
+        .join(OrderItem, OrderItem.order_id == Order.id)
+        .join(Product, Product.id == OrderItem.product_id)
+        .where(Product.merchant_id == merchant.id)
+        .group_by(Order.status)
+    )).all()
+    return {"by_status": {s.value: c for s, c in rows}}
+
+
+async def _find_products(db, merchant, args) -> dict:
+    query = str(args.get("query", ""))
+    rows = (await db.execute(
+        select(Product.id, Product.title, Product.stock_qty, Product.price)
+        .where(
+            Product.merchant_id == merchant.id,
+            Product.deleted_at.is_(None),
+            Product.title.ilike(f"%{query}%"),
+        )
+        .limit(10)
+    )).all()
+    return {"products": [
+        {"id": i, "title": t, "stock_qty": int(s), "price": str(Decimal(p))} for i, t, s, p in rows
+    ]}
+
+
+async def _get_product_forecast(db, merchant, args) -> dict:
+    product_id = str(args.get("product_id", ""))
+    horizon = int(args.get("horizon_days", 14))
+    owned = (await db.execute(
+        select(Product.id).where(
+            Product.id == product_id,
+            Product.merchant_id == merchant.id,
+            Product.deleted_at.is_(None),
+        )
+    )).scalar_one_or_none()
+    if not owned:
+        return {"error": "product not found or not owned by you"}
+    points = await forecast_product_demand(db, product_id, horizon)
+    return {
+        "product_id": product_id,
+        "horizon_days": horizon,
+        "points": [{"ds": p.ds.isoformat(), "yhat": round(p.yhat, 2)} for p in points],
+    }
+
+
+async def _get_restock_alerts(db, merchant, args) -> dict:
+    lead = int(args.get("lead_time_days", 7))
+    alerts = await _restock_alerts(db, merchant.id, lead_time_days=lead)
+    return {"lead_time_days": lead, "alerts": [a.to_dict() for a in alerts]}
+
+
+TOOL_HANDLERS.update({
+    "get_revenue_summary": _get_revenue_summary,
+    "get_top_products": _get_top_products,
+    "get_order_stats": _get_order_stats,
+    "find_products": _find_products,
+    "get_product_forecast": _get_product_forecast,
+    "get_restock_alerts": _get_restock_alerts,
+})
+
+
+def _tool(name: str, description: str, properties: dict, required: list[str]) -> dict:
+    return {
+        "name": name,
+        "description": description,
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": properties,
+            "required": required,
+            "additionalProperties": False,
+        },
+    }
+
+
+TOOL_DEFS.extend([
+    _tool("get_revenue_summary", "Total revenue for this store over the last N days.",
+          {"period_days": {"type": "integer", "description": "Look-back window in days."}},
+          ["period_days"]),
+    _tool("get_top_products", "This store's top products by revenue over the last N days.",
+          {"limit": {"type": "integer", "description": "How many products to return."},
+           "period_days": {"type": "integer", "description": "Look-back window in days."}},
+          ["limit", "period_days"]),
+    _tool("get_order_stats", "Count of this store's orders grouped by status (includes pending_review/fraud).",
+          {}, []),
+    _tool("find_products", "Search this store's catalog by title substring; use to resolve a product reference to an id.",
+          {"query": {"type": "string", "description": "Case-insensitive title substring."}},
+          ["query"]),
+    _tool("get_product_forecast", "Prophet demand forecast for one of this store's products.",
+          {"product_id": {"type": "string", "description": "Product id from find_products."},
+           "horizon_days": {"type": "integer", "description": "Days to forecast forward."}},
+          ["product_id", "horizon_days"]),
+    _tool("get_restock_alerts", "Products whose forecast demand over a lead time exceeds current stock.",
+          {"lead_time_days": {"type": "integer", "description": "Restock lead time in days."}},
+          ["lead_time_days"]),
+])
