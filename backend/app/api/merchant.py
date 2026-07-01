@@ -23,12 +23,18 @@ from app.models.models import (
 )
 from app.schemas.dashboard import (
     DailyRevenue,
+    ForecastPointResponse,
     MerchantDashboard,
     OrderStatusCount,
+    ProductForecastResponse,
+    RestockAlertResponse,
+    RestockAlertsResponse,
     RevenueSummary,
     RevenueWindows,
     TopProduct,
 )
+from app.ml.forecast import forecast_product_demand
+from app.services.restock import get_restock_alerts
 
 router = APIRouter(prefix="/merchant", tags=["merchant"])
 
@@ -162,3 +168,71 @@ async def revenue_summary(
 
     series = [DailyRevenue(day=day.date(), revenue=Decimal(rev)) for day, rev in rows]
     return RevenueSummary(start=start, end=end, series=series)
+
+
+@router.get(
+    "/products/{product_id}/forecast",
+    response_model=ProductForecastResponse,
+)
+async def product_forecast(
+    product_id: str,
+    request: Request,
+    horizon: int = Query(default=30, ge=1, le=180),
+    force_refresh: bool = Query(default=False),
+    current_user: User = Depends(require_role(UserRole.merchant)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Prophet-driven demand forecast for one of the merchant's products.
+
+    Returns an empty `points` list if the product has fewer than 14 days of
+    revenue-status sales history — Prophet fits below that threshold produce
+    uninformative confidence bands.
+    """
+    product = (
+        await db.execute(
+            select(Product).where(
+                Product.id == product_id, Product.deleted_at.is_(None)
+            )
+        )
+    ).scalar_one_or_none()
+    if not product:
+        raise _problem(
+            status.HTTP_404_NOT_FOUND, "Not Found",
+            "Product not found", request.url.path,
+        )
+    if product.merchant_id != current_user.id:
+        raise _problem(
+            status.HTTP_403_FORBIDDEN, "Forbidden",
+            "You do not own this product", request.url.path,
+        )
+
+    points = await forecast_product_demand(db, product_id, horizon, force_refresh=force_refresh)
+    return ProductForecastResponse(
+        product_id=product_id,
+        horizon_days=horizon,
+        points=[
+            ForecastPointResponse(
+                ds=p.ds, yhat=p.yhat, yhat_lower=p.yhat_lower, yhat_upper=p.yhat_upper,
+            )
+            for p in points
+        ],
+    )
+
+
+@router.get("/restock-alerts", response_model=RestockAlertsResponse)
+async def restock_alerts(
+    request: Request,
+    lead_time: int = Query(
+        default=7, ge=1, le=90,
+        description="Days between order-to-restock and inventory hitting the shelf.",
+    ),
+    current_user: User = Depends(require_role(UserRole.merchant)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Products where predicted demand across `lead_time` days exceeds current
+    stock — sorted by shortfall (largest first)."""
+    alerts = await get_restock_alerts(db, current_user.id, lead_time_days=lead_time)
+    return RestockAlertsResponse(
+        lead_time_days=lead_time,
+        alerts=[RestockAlertResponse(**a.to_dict()) for a in alerts],
+    )

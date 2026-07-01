@@ -50,3 +50,30 @@ class RevenueSummaryQuery(BaseModel):
     """Validated dates; FastAPI builds this from query params."""
     start: date = Field(description="Inclusive start date, YYYY-MM-DD")
     end: date = Field(description="Inclusive end date, YYYY-MM-DD")
+
+
+class ForecastPointResponse(BaseModel):
+    ds: date
+    yhat: float
+    yhat_lower: float
+    yhat_upper: float
+
+
+class ProductForecastResponse(BaseModel):
+    product_id: str
+    horizon_days: int
+    points: list[ForecastPointResponse]
+
+
+class RestockAlertResponse(BaseModel):
+    product_id: str
+    title: str
+    current_stock: int
+    predicted_demand_units: float
+    shortfall_units: float
+    days_until_stockout: int | None
+
+
+class RestockAlertsResponse(BaseModel):
+    lead_time_days: int
+    alerts: list[RestockAlertResponse]

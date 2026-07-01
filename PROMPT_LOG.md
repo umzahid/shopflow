@@ -411,11 +411,26 @@ Target: **30+ entries** covering all 6 domains for full marks (45–50 pts).
 
 ### Entry 23
 - **Task Reference:** Domain 5 – Task 23 (Synthetic sales data generation)
-- **Tool Used:** Claude
-- **Prompt (verbatim):**
-- **Output Quality (1–5):**
+- **Tool Used:** Claude Code (Opus 4.7)
+- **Prompt (verbatim):** "Write `backend/app/scripts/seed_synthetic_sales.py` that seeds a merchant, a customer, ~10 products, and 180 days of orders. The generator should bake in weekly seasonality (weekends spike) and a mild upward trend so Prophet has real signal to fit. Make it deterministic via a `--seed` flag, and idempotent so re-runs don't crash — but support a `--reset` flag that wipes prior seed data first."
+- **Output Quality (1–5):** 4
+- **What You Changed:** `backend/app/scripts/seed_synthetic_sales.py` (200 lines). Argparse CLI: `--products` (default 10, max 10), `--days` (default 180), `--seed` (42), `--reset`. Structure: get-or-create `seed-merchant@shopflow.io` and `seed-customer@shopflow.io`; get-or-create category "seed"; get-or-create products from a static list of 10 realistic titles/descriptions (Trailhead Runner, Studio Desk Lamp, etc. — priced $9.99→$189.99). Then for each of the last N days: base rate = `5 + (day_index/180)*15` (trend), +3 on weekends (seasonality), +noise `randint(-2,3)`. Each order has 1-3 line items via `random.sample()` without replacement so no dupes. Backdates via explicit `created_at`/`updated_at` override on the ORM object; commits day-by-day to keep transactions small. Encodes product embeddings on create via `embed_product_text()` so semantic search continues to work on seeded rows.
+- **What You Learned:** SQLAlchemy 2.0's default `server_default=func.now()` for `created_at` fires at INSERT, so overriding with a Python-side value works cleanly — you set `created_at=<ts>` on the mapped instance and SA emits the value instead of `DEFAULT`. Bigger gotcha: `expire_on_commit=False` on the session — without it, the products list you return from `_get_or_create_products` gets expired the first time you `commit()`, and subsequent `.id` access blows up with a `MissingGreenlet` error.
+
+### Entry 23b
+- **Task Reference:** Domain 5 – Week 5 Prophet forecasting + restock alerts (unslotted in template)
+- **Tool Used:** Claude Code (Opus 4.7)
+- **Prompt (verbatim):** "Build a Prophet-based demand forecasting service for ShopFlow. `forecast_product_demand(db, product_id, horizon_days)` aggregates daily unit sales from `order_items` (revenue-status orders only), fits Prophet with weekly seasonality, and returns `[(ds, yhat, yhat_lower, yhat_upper)]`. Cache fits in Redis for 24h. Expose swap-hook + env toggle for tests to skip the fit. Add `/merchant/products/{id}/forecast` and `/merchant/restock-alerts?lead_time=7` endpoints. Restock alert fires when cumulative predicted demand across lead time > current stock, sorted by shortfall descending."
+- **Output Quality (1–5):** 4
 - **What You Changed:**
-- **What You Learned:**
+  - `backend/requirements.txt` — added `prophet==1.1.5`, `pandas==2.2.2`.
+  - `backend/app/ml/forecast.py` — Prophet wrapper (lazy import so module load is cheap), Redis-cached fits (`forecast:{pid}:{horizon}`, 24h TTL), `set_forecaster()` swap hook, `_fake_forecast` deterministic linear projection (mean of last 14 days ±20%), `SHOPFLOW_FAKE_FORECAST=1` env toggle. Loads daily sales as `(date, units)` with missing days zero-filled so Prophet sees a continuous series. Returns empty list under 14 days of history — bands are meaningless below that threshold.
+  - `backend/app/services/restock.py` — sums `yhat` across `lead_time_days`, subtracts from stock, computes `days_until_stockout` by walking the forecast day-by-day. Sorts descending by shortfall.
+  - `backend/app/api/merchant.py` — `GET /merchant/products/{id}/forecast?horizon=30&force_refresh=false` (404/403 for missing/foreign product) and `GET /merchant/restock-alerts?lead_time=7`.
+  - `backend/app/schemas/dashboard.py` — added `ForecastPointResponse`, `ProductForecastResponse`, `RestockAlertResponse`, `RestockAlertsResponse`.
+  - `backend/tests/conftest.py` — session-scoped `_use_fake_forecaster` fixture, same pattern as the encoder swap in Week 4.
+  - `backend/tests/integration/test_merchant_forecast.py` — 9 tests (role guard, 404, 403, empty history, populated history → horizon points, restock empty when ample stock, restock fires when demand > stock with correct shortfall & days_until_stockout, alerts sorted by shortfall descending).
+- **What You Learned:** Prophet's `cmdstanpy` backend logs on info-level by default, which turns every fit into a 30-line stderr splat — muting `cmdstanpy` and `prophet` loggers up-front is essentially mandatory for a clean server output. The bigger design lesson: aggregating daily sales in SQL (`date_trunc('day', created_at)` + `SUM(quantity)`) instead of Python keeps the Prophet input tight; but you *must* zero-fill missing days back in Python, because Prophet interprets gaps as gaps rather than zeros and the fit degrades.
 
 ### Entry 24
 - **Task Reference:** Domain 5 – Task 24 (Semantic search pipeline)

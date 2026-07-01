@@ -65,6 +65,18 @@ def _use_fake_encoder():
     set_encoder(None)
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _use_fake_forecaster():
+    """Swap in the linear-projection forecaster so tests don't fit real Prophet
+    models — Prophet + cmdstanpy adds ~2s per fit and pulls in a Stan runtime
+    we don't need for exercising the API layer."""
+    from app.ml.forecast import _fake_forecast, set_forecaster
+
+    set_forecaster(_fake_forecast)
+    yield
+    set_forecaster(None)
+
+
 # ── Function-level: truncate all rows between tests ─────────────────────────
 
 @pytest.fixture(autouse=True)
