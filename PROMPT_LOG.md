@@ -472,11 +472,17 @@ Target: **30+ entries** covering all 6 domains for full marks (45–50 pts).
 
 ### Entry 26
 - **Task Reference:** Domain 5 – Task 26 (Merchant Copilot with tool calling)
-- **Tool Used:** Claude
-- **Prompt (verbatim):**
-- **Output Quality (1–5):**
+- **Tool Used:** Claude Code (Opus 4.8) — full "superpowers" workflow: brainstorming → spec → writing-plans → subagent-driven-development (fresh implementer + reviewer subagent per task, final whole-feature review).
+- **Prompt (verbatim):** "kick off brainstorming for the Merchant Copilot (Entry 26) and produce a written plan before any code" → then "Subagent-driven, go ahead".
+- **Output Quality (1–5):** 4
 - **What You Changed:**
-- **What You Learned:**
+  - `docs/superpowers/specs/2026-07-01-merchant-copilot-design.md` + `docs/superpowers/plans/2026-07-01-merchant-copilot.md` — approved design spec and 5-task TDD implementation plan.
+  - `backend/app/services/copilot.py` — single-turn manual async agentic loop against `claude-opus-4-8`. `LLMBlock`/`LLMResponse` duck-typed blocks let a scripted fake and the real SDK flow through the same loop; `set_llm()` swap hook + `SHOPFLOW_FAKE_COPILOT=1` keep Anthropic out of CI; `_anthropic_turn` lazily imports `anthropic` and is `# pragma: no cover`. Six read-only, merchant-scoped tool handlers (revenue, top-products, order-stats, find-products, forecast, restock-alerts) reusing Week-5 services; `CopilotError` → RFC 7807.
+  - `backend/app/schemas/copilot.py` — `CopilotRequest` / `ToolCallTrace` / `CopilotResponse` (answer + tool-call trace).
+  - `backend/app/api/merchant.py` — `POST /merchant/copilot` (merchant-role-gated); empty question → 400; `CopilotError` → 503/502.
+  - `backend/app/core/config.py` — `COPILOT_MODEL="claude-opus-4-8"`, `COPILOT_MAX_ITERATIONS=5`, `COPILOT_EFFORT="medium"`. `backend/requirements.txt` — `anthropic==0.69.0`.
+  - `backend/tests/conftest.py` — `_reset_copilot_llm` autouse fixture. Tests: `test_copilot_schemas.py` (3), `test_copilot_loop.py` (5), `test_copilot_tools.py` (8, incl. cross-merchant isolation for revenue/top/order-stats), `test_copilot_endpoint.py` (4, incl. end-to-end isolation). Full suite **171 passed, coverage 78.72%** (gate 70%, copilot.py 91%), flake8 clean.
+- **What You Learned:** The security boundary is code, not prompt — the model never names `merchant_id`; the backend injects the authenticated merchant into every handler, so a hallucinated tool call still can't cross tenants (proven by seeding two merchants and asserting zero leakage). The subagent review loop earned its keep twice: it caught thin isolation-test coverage on two handlers, and the final review flagged a real version-pin bug — `anthropic==0.69.0` accepts `thinking` as a named kwarg but **not** `output_config`, so the (CI-invisible, `# pragma: no cover`) production call would `TypeError`; fixed by routing `output_config` via `extra_body` so it reaches the wire regardless of SDK build. Reviewer models with a pre-Opus-4.8 knowledge cutoff also produced a false positive (claiming adaptive thinking / `output_config` don't exist) — the controller adjudicated against the authoritative claude-api reference. **Deploy note:** production must set `ANTHROPIC_API_KEY` and must NOT set `SHOPFLOW_FAKE_COPILOT=1`, or merchants get the fake-turn placeholder.
 
 ### Entry 27
 - **Task Reference:** Domain 5 – Task 27 (AI product description generator)
