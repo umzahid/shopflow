@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     COPILOT_MODEL: str = "claude-opus-4-8"
     COPILOT_MAX_ITERATIONS: int = 5
     COPILOT_EFFORT: str = "medium"
+    # AI product description generator (Week 6)
+    DESCRIPTION_MODEL: str = "claude-opus-4-8"
+    DESCRIPTION_MAX_VARIANTS: int = 3
 
 
 @lru_cache
