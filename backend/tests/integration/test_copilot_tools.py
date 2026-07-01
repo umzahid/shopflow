@@ -1,5 +1,5 @@
 """Merchant-scoped Copilot tool handlers (real DB)."""
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from decimal import Decimal
 
 import pytest
@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.config import settings
-from app.models.models import Order, OrderItem, OrderStatus, Product, User
+from app.models.models import Order, OrderItem, OrderStatus, User
 from app.services import copilot
 
 from tests.integration.helpers import create_product, register_customer, register_merchant
