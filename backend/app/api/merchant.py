@@ -21,6 +21,7 @@ from app.models.models import (
     User,
     UserRole,
 )
+from app.schemas.copilot import CopilotRequest, CopilotResponse, ToolCallTrace
 from app.schemas.dashboard import (
     DailyRevenue,
     ForecastPointResponse,
@@ -34,6 +35,7 @@ from app.schemas.dashboard import (
     TopProduct,
 )
 from app.ml.forecast import forecast_product_demand
+from app.services import copilot as copilot_svc
 from app.services.restock import get_restock_alerts
 
 router = APIRouter(prefix="/merchant", tags=["merchant"])
@@ -235,4 +237,32 @@ async def restock_alerts(
     return RestockAlertsResponse(
         lead_time_days=lead_time,
         alerts=[RestockAlertResponse(**a.to_dict()) for a in alerts],
+    )
+
+
+@router.post("/copilot", response_model=CopilotResponse)
+async def merchant_copilot(
+    body: CopilotRequest,
+    request: Request,
+    current_user: User = Depends(require_role(UserRole.merchant)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Single-turn, read-only natural-language analytics for the merchant's store."""
+    question = body.question.strip()
+    if not question:
+        raise _problem(
+            status.HTTP_400_BAD_REQUEST, "Bad Request",
+            "question must not be empty", request.url.path,
+        )
+    try:
+        result = await copilot_svc.answer_question(db, current_user, question)
+    except copilot_svc.CopilotError as e:
+        title = "Service Unavailable" if e.status_code == status.HTTP_503_SERVICE_UNAVAILABLE else "Bad Gateway"
+        raise _problem(e.status_code, title, e.detail, request.url.path)
+
+    return CopilotResponse(
+        answer=result.answer,
+        tool_calls=[
+            ToolCallTrace(tool=c.tool, input=c.input, result=c.result) for c in result.tool_calls
+        ],
     )

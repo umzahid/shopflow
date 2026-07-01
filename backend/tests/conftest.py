@@ -88,6 +88,16 @@ def _use_fake_fraud_scorer():
     set_scorer(None)
 
 
+@pytest.fixture(autouse=True)
+def _reset_copilot_llm():
+    """Reset the Copilot LLM swap hook after each test so a stray test can't
+    leave a scripted turn set for the next one."""
+    yield
+    from app.services.copilot import set_llm
+
+    set_llm(None)
+
+
 # ── Function-level: truncate all rows between tests ─────────────────────────
 
 @pytest.fixture(autouse=True)
