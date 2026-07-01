@@ -1,4 +1,5 @@
 from decimal import Decimal
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -23,6 +24,7 @@ from app.schemas.product import (
     ProductSearchResult,
     ProductUpdate,
 )
+from app.services.embedding import embed_product_text, encode as encode_query
 
 router = APIRouter(prefix="/products", tags=["products"])
 
@@ -49,34 +51,102 @@ def _cursor_for(product: Product) -> str:
 # doesn't route "search" as a product id.
 # ---------------------------------------------------------------------------
 
+# Hybrid ranking weights. Tuned so semantic matches drive discovery of
+# meaning-similar items while lexical matches keep exact-token hits visible.
+_LEX_WEIGHT = 0.4
+_SEM_WEIGHT = 0.6
+# Below this cosine similarity a product is considered unrelated for hybrid
+# purposes and won't show up on semantic strength alone.
+_SEM_THRESHOLD = 0.3
+
+
+def _active_product_filters():
+    return (Product.deleted_at.is_(None), Product.status == ProductStatus.active)
+
+
+def _tsv_expr():
+    return func.to_tsvector(
+        "english",
+        func.coalesce(Product.title, "") + " " + func.coalesce(Product.description, ""),
+    )
+
+
+async def _lexical_search(db: AsyncSession, q: str, limit: int):
+    tsv = _tsv_expr()
+    tsq = func.plainto_tsquery("english", q)
+    score = func.ts_rank(tsv, tsq).label("score")
+    stmt = (
+        select(Product, score)
+        .where(tsv.op("@@")(tsq), *_active_product_filters())
+        .order_by(score.desc(), Product.created_at.desc())
+        .limit(limit)
+    )
+    return (await db.execute(stmt)).all()
+
+
+async def _semantic_search(db: AsyncSession, q: str, limit: int):
+    qvec = encode_query(q)
+    distance = Product.embedding.cosine_distance(qvec)
+    similarity = (1 - distance).label("score")
+    stmt = (
+        select(Product, similarity)
+        .where(Product.embedding.is_not(None), *_active_product_filters())
+        .order_by(distance)
+        .limit(limit)
+    )
+    return (await db.execute(stmt)).all()
+
+
+async def _hybrid_search(db: AsyncSession, q: str, limit: int):
+    tsv = _tsv_expr()
+    tsq = func.plainto_tsquery("english", q)
+    lex_score = func.ts_rank(tsv, tsq)
+
+    qvec = encode_query(q)
+    distance = Product.embedding.cosine_distance(qvec)
+    sem_score = 1 - distance
+
+    combined = (
+        _LEX_WEIGHT * func.coalesce(lex_score, 0.0)
+        + _SEM_WEIGHT * func.coalesce(sem_score, 0.0)
+    ).label("score")
+
+    stmt = (
+        select(Product, combined)
+        .where(
+            *_active_product_filters(),
+            # Keep products that either match lexically OR have a strong
+            # enough semantic match. Without the threshold, every product with
+            # any embedding would show up in every query.
+            tsv.op("@@")(tsq) | (sem_score > _SEM_THRESHOLD),
+        )
+        .order_by(combined.desc(), Product.created_at.desc())
+        .limit(limit)
+    )
+    return (await db.execute(stmt)).all()
+
+
 @router.get("/search", response_model=list[ProductSearchResult])
 async def search_products(
     q: str = Query(min_length=1, max_length=255),
     limit: int = Query(default=20, ge=1, le=50),
+    mode: Literal["lexical", "semantic", "hybrid"] = Query(default="hybrid"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Full-text search over title + description. Returns up to `limit` active
-    products ranked by tsvector relevance. Semantic search arrives in Week 5
-    via the embedding column; this endpoint is the lexical baseline.
-    """
-    tsv = func.to_tsvector(
-        "english",
-        func.coalesce(Product.title, "") + " " + func.coalesce(Product.description, ""),
-    )
-    tsq = func.plainto_tsquery("english", q)
-    score = func.ts_rank(tsv, tsq).label("score")
+    """Search products by title + description.
 
-    stmt = (
-        select(Product, score)
-        .where(
-            tsv.op("@@")(tsq),
-            Product.deleted_at.is_(None),
-            Product.status == ProductStatus.active,
-        )
-        .order_by(score.desc(), Product.created_at.desc())
-        .limit(limit)
-    )
-    rows = (await db.execute(stmt)).all()
+    - `lexical`: Postgres tsvector rank (exact-token match).
+    - `semantic`: pgvector cosine similarity on all-MiniLM-L6-v2 embeddings.
+    - `hybrid` (default): weighted blend of both, favoring semantic for recall
+      and lexical for exact-term precision.
+    """
+    if mode == "lexical":
+        rows = await _lexical_search(db, q, limit)
+    elif mode == "semantic":
+        rows = await _semantic_search(db, q, limit)
+    else:
+        rows = await _hybrid_search(db, q, limit)
+
     return [
         ProductSearchResult(
             **ProductResponse.model_validate(p).model_dump(),
@@ -167,6 +237,7 @@ async def create_product(
         images=list(body.images),
         category_id=body.category_id,
         status=body.status,
+        embedding=embed_product_text(body.title, body.description),
     )
     db.add(product)
     await db.flush()
@@ -196,8 +267,11 @@ async def update_product(
         raise _problem(status.HTTP_403_FORBIDDEN, "Forbidden", "You do not own this product", request.url.path)
 
     updates = body.model_dump(exclude_unset=True)
+    text_changed = "title" in updates or "description" in updates
     for field, value in updates.items():
         setattr(product, field, value)
+    if text_changed:
+        product.embedding = embed_product_text(product.title, product.description)
 
     await db.flush()
     await db.refresh(product)

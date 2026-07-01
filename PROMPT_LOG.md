@@ -412,11 +412,23 @@ Target: **30+ entries** covering all 6 domains for full marks (45–50 pts).
 
 ### Entry 24
 - **Task Reference:** Domain 5 – Task 24 (Semantic search pipeline)
-- **Tool Used:** Copilot / Claude
-- **Prompt (verbatim):**
-- **Output Quality (1–5):**
+- **Tool Used:** Claude Code (Opus 4.7)
+- **Prompt (verbatim):** "save baseline memory and start Week 4 pgvector search"
+- **Output Quality (1–5):** 4
 - **What You Changed:**
+  - `backend/requirements.txt` — added `sentence-transformers==3.0.1`, `pgvector==0.3.2`.
+  - `backend/app/models/models.py` — mapped `Product.embedding: Vector(384)` (previously the column existed in DB only, via migration 002).
+  - `backend/app/services/embedding.py` — new module. Lazy singleton for `all-MiniLM-L6-v2`, `encode()` / `encode_batch()`, deterministic hash-based `_fake_encode()` for tests, `set_encoder()` swap hook, `SHOPFLOW_FAKE_EMBEDDINGS=1` env toggle.
+  - `backend/app/api/products.py` — replaced the lexical-only `/products/search` with `?mode=lexical|semantic|hybrid` (default `hybrid`). Semantic uses `Product.embedding.cosine_distance(qvec)`. Hybrid = `0.4 * ts_rank + 0.6 * (1 - cosine_distance)` with a `sem_score > 0.3` OR `tsv @@ tsq` filter to avoid returning every embedded row on every query. POST/PATCH now populate `embedding` via `embed_product_text()`; PATCH only re-encodes when `title` or `description` changes.
+  - `backend/alembic/versions/003_hnsw_index_on_product_embedding.py` — partial HNSW index (`m=16, ef_construction=64`, `WHERE embedding IS NOT NULL`) over `vector_cosine_ops`. Chose HNSW over IVFFlat because it needs no training and works on empty tables.
+  - `backend/app/scripts/backfill_embeddings.py` — idempotent CLI (`python -m app.scripts.backfill_embeddings`) that batches rows with `embedding IS NULL` through the encoder.
+  - `backend/tests/conftest.py` — installs `CREATE EXTENSION IF NOT EXISTS vector` before `create_all` (required now that Product has a `Vector(384)` column), and session-scopes `set_encoder(_fake_encode)` so CI never downloads the ~90MB model.
+  - `backend/tests/integration/test_products_search.py` — 10 new tests covering lexical filter, active-only/soft-delete visibility, semantic self-match at score ≈ 1.0, hybrid default mode + lexical-only surfacing, mode/query validation, limit clamping, encode-on-create/PATCH invariance.
 - **What You Learned:**
+  - The migration comment said "semantic search arrives in Week 5", but the column, dim (384), and tsvector GIN index were already in place — Week 4 was almost entirely a matter of wiring the encoder + endpoint on top of existing scaffolding.
+  - `pgvector.sqlalchemy.Vector` exposes `.cosine_distance()` directly on the ORM attribute, so no raw SQL is needed even for hybrid ranking.
+  - `Base.metadata.create_all` can't emit `vector(N)` DDL unless the `vector` extension is present — the test bootstrap needs an explicit `CREATE EXTENSION` before table creation, since conftest bypasses Alembic entirely.
+  - Real sentence-transformers in CI is a non-starter (~90MB download, cold-start latency); a deterministic hash-based encoder preserves the ability to unit-test ordering (`encode(q) == encode(product_text)` ⇒ similarity 1.0) without touching HuggingFace.
 
 ### Entry 25
 - **Task Reference:** Domain 5 – Task 25 (Fraud detection feature set and model design)

@@ -35,6 +35,9 @@ def setup_test_db():
     async def _create():
         engine = create_async_engine(TEST_DATABASE_URL)
         async with engine.begin() as conn:
+            # pgvector must be installed before create_all — Product.embedding
+            # is Vector(384) and create_all can't emit the DDL otherwise.
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
             await conn.run_sync(Base.metadata.drop_all)
             await conn.run_sync(Base.metadata.create_all)
         await engine.dispose()
@@ -48,6 +51,18 @@ def setup_test_db():
     _sync_run(_create())
     yield
     _sync_run(_drop())
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _use_fake_encoder():
+    """Swap in the hash-based encoder for the whole test session — avoids
+    downloading the 90MB sentence-transformers model in CI, and makes semantic
+    ranking deterministic across runs."""
+    from app.services.embedding import _fake_encode, set_encoder
+
+    set_encoder(_fake_encode)
+    yield
+    set_encoder(None)
 
 
 # ── Function-level: truncate all rows between tests ─────────────────────────
