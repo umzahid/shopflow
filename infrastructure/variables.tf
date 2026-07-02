@@ -57,3 +57,21 @@ variable "public_access_cidrs" {
   type        = list(string)
   default     = ["0.0.0.0/0"]
 }
+
+variable "cdn_price_class" {
+  description = "CloudFront price class for the CDN."
+  type        = string
+  default     = "PriceClass_100"
+}
+
+variable "cdn_aliases" {
+  description = "Custom domain names for the CDN (requires cdn_acm_certificate_arn)."
+  type        = list(string)
+  default     = []
+}
+
+variable "cdn_acm_certificate_arn" {
+  description = "ACM cert ARN (us-east-1) for CDN custom domains. Null uses the default CloudFront cert."
+  type        = string
+  default     = null
+}

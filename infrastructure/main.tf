@@ -35,3 +35,12 @@ module "compute" {
   public_access_cidrs    = var.public_access_cidrs
   node_instance_types    = var.node_instance_types
 }
+
+module "cdn" {
+  source = "./modules/cdn"
+
+  name                = local.name
+  price_class         = var.cdn_price_class
+  aliases             = var.cdn_aliases
+  acm_certificate_arn = var.cdn_acm_certificate_arn
+}

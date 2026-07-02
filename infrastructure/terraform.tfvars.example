@@ -16,3 +16,8 @@ node_instance_types = ["t3.large"]
 endpoint_public_access = true
 # Restrict this to your office / VPN egress CIDRs before a real apply.
 public_access_cidrs = ["0.0.0.0/0"]
+
+# CloudFront CDN
+cdn_price_class = "PriceClass_100"
+# cdn_aliases             = ["cdn.example.com"]
+# cdn_acm_certificate_arn = "arn:aws:acm:us-east-1:<account-id>:certificate/<id>"

@@ -27,3 +27,18 @@ output "oidc_provider_arn" {
   description = "IRSA OIDC provider ARN."
   value       = module.compute.oidc_provider_arn
 }
+
+output "cdn_distribution_domain_name" {
+  description = "CloudFront distribution domain name."
+  value       = module.cdn.distribution_domain_name
+}
+
+output "cdn_distribution_id" {
+  description = "CloudFront distribution id."
+  value       = module.cdn.distribution_id
+}
+
+output "cdn_origin_bucket_name" {
+  description = "CDN static-assets origin bucket name."
+  value       = module.cdn.origin_bucket_name
+}
