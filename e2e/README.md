@@ -61,7 +61,9 @@ rendered DOM, not guessed. To add or repair locators, run the project skill:
 ```
 
 The skill (`.claude/skills/find-locators/SKILL.md`) drives a real browser via
-the **Playwright MCP server** (`claude mcp add playwright -- npx "@playwright/mcp@latest"`):
+the **Playwright MCP server**, configured project-wide in `.mcp.json` (runs in
+Docker — `mcr.microsoft.com/playwright/mcp`, headless, `--network host` — so no
+local node is needed; approve the server once when Claude Code prompts):
 navigate → accessibility snapshot → derive locators (`getByRole` > `getByLabel`
 > `getByPlaceholder` > `getByText`; no nth/positional CSS; parameterized
 aria-labels become functions) → write them into the page objects → verify with
