@@ -1,0 +1,16 @@
+# Copy to terraform.tfvars and adjust. NO SECRETS here — VPC/EKS take no secrets;
+# AWS credentials come from your environment (AWS_PROFILE / env vars / IAM role),
+# never from this file.
+region      = "us-east-1"
+project     = "shopflow"
+environment = "dev"
+
+vpc_cidr           = "10.0.0.0/16"
+az_count           = 3
+single_nat_gateway = true
+
+cluster_version     = "1.30"
+node_instance_types = ["t3.large"]
+
+# Restrict this to your office / VPN egress CIDRs before a real apply.
+public_access_cidrs = ["0.0.0.0/0"]
