@@ -28,6 +28,29 @@ resource "aws_s3_bucket_versioning" "origin" {
   }
 }
 
+# Versioning without expiry grows storage without bound — cap noncurrent
+# versions and clean up failed multipart uploads (cost review, Entry 22).
+resource "aws_s3_bucket_lifecycle_configuration" "origin" {
+  bucket = aws_s3_bucket.origin.id
+
+  rule {
+    id     = "expire-noncurrent-versions"
+    status = "Enabled"
+
+    filter {}
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+
+  depends_on = [aws_s3_bucket_versioning.origin]
+}
+
 # --- Origin Access Control (OAC) ---
 resource "aws_cloudfront_origin_access_control" "this" {
   name                              = "${var.name}-oac"
