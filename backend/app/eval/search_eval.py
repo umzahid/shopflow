@@ -52,6 +52,12 @@ async def seed_search_corpus(db: AsyncSession, corpus: list[dict]) -> str:
         db.add(merchant)
         await db.flush()
 
+    titles = [entry["title"] for entry in corpus]
+    if len(set(titles)) != len(titles):
+        # Relevance is joined back to results by title, so duplicates would
+        # silently corrupt NDCG/recall. Fail loudly instead.
+        raise ValueError("golden corpus has duplicate titles (title is the relevance join key)")
+
     for entry in corpus:
         title = entry["title"]
         description = entry.get("description", "")

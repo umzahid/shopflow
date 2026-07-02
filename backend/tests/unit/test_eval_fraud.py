@@ -19,6 +19,10 @@ def test_fraud_eval_report_is_wellformed(_heuristic_scorer):
     m = report["metrics"]
     for key in ("precision", "recall", "f1", "accuracy", "roc_auc"):
         assert 0.0 <= m[key] <= 1.0
+    # Discrimination floor: the heuristic scorer must actually rank fraud above
+    # legit (deterministic at this seed, AUC ~0.71). Catches a silently-degraded
+    # or constant scorer that would otherwise pass the shape-only checks above.
+    assert m["roc_auc"] > 0.65
 
 
 def test_fraud_eval_is_deterministic(_heuristic_scorer):
