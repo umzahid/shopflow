@@ -388,11 +388,15 @@ Target: **30+ entries** covering all 6 domains for full marks (45–50 pts).
 
 ### Entry 20
 - **Task Reference:** Domain 4 – Task 20 (CloudFront distribution config)
-- **Tool Used:** Claude / Terraform Copilot
-- **Prompt (verbatim):**
-- **Output Quality (1–5):**
+- **Tool Used:** Claude Code (Opus 4.8) — "superpowers" workflow: design spec → writing-plans → subagent-driven-development (implementer subagent per task; orchestrator review + final full-tree validate).
+- **Prompt (verbatim):** _[Umair: confirm exact wording]_ "continue with task 3" → (clarified: Domain 4's 3rd task = E20 CloudFront) → "go" (spec) → "go" (plan + run).
+- **Output Quality (1–5):** _(Umair to rate)_
 - **What You Changed:**
-- **What You Learned:**
+  - `docs/superpowers/specs/2026-07-02-cloudfront-cdn-design.md` + `docs/superpowers/plans/2026-07-02-cloudfront-cdn.md` — approved design spec and 3-task plan.
+  - `infrastructure/modules/cdn/` — CloudFront distribution over a **private S3 origin** it owns: bucket via `bucket_prefix` (globally unique), all four public-access blocks on, SSE-AES256, versioning enabled. **Origin Access Control (OAC, SigV4)** — not the legacy OAI — with an `aws_s3_bucket_policy` granting `s3:GetObject` to `cloudfront.amazonaws.com` scoped by `AWS:SourceArn = distribution.arn`. Distribution uses AWS-managed cache/origin-request policies via data sources (`Managed-CachingOptimized`, `Managed-CORS-S3Origin`), a custom security-headers response policy (HSTS/X-Content-Type-Options/frame-DENY/referrer/XSS), `redirect-to-https`, conditional `viewer_certificate` (default cert or ACM+aliases), and optional WAF (`web_acl_id`) + access logging (`dynamic logging_config`), both off by default.
+  - `infrastructure/` root — `module "cdn"` block, `cdn_price_class`/`cdn_aliases`/`cdn_acm_certificate_arn` variables, three `cdn_*` outputs, tfvars example lines.
+  - Verified offline in `hashicorp/terraform:1.9` Docker: `fmt -check -recursive` clean + `init -backend=false` + `validate` = "Success!" for the module standalone AND the full root (networking + compute + cdn), aws v5.100.0.
+- **What You Learned:** OAC (`aws_cloudfront_origin_access_control`) is the modern replacement for OAI — the origin block takes `origin_access_control_id` + `bucket_regional_domain_name` and drops `s3_origin_config` entirely. The bucket-policy ↔ distribution relationship looks circular but isn't: bucket → OAC → distribution → bucket-policy is linear because the *bucket* never references the distribution (only the separate bucket-policy resource does), so `AWS:SourceArn = distribution.arn` scoping is safe. AWS-managed cache/origin-request policies pulled via `data` sources beat hand-rolling them. The default-cert path forces `minimum_protocol_version = "TLSv1"` (ACM allows `TLSv1.2_2021`), handled with a conditional. Same offline-validate discipline as E18 — the managed-policy data sources and OAC SourceArn only fully resolve at plan/apply, which stays out of scope.
 
 ### Entry 21
 - **Task Reference:** Domain 4 – Task 21 (Kubernetes manifests for EKS)
