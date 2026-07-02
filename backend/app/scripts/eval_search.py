@@ -49,9 +49,15 @@ def main() -> None:
     for mode, stats in report["modes"].items():
         print("%-10s %8.4f %10.4f" % (mode, stats["ndcg@k"], stats["recall@k"]))
 
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(report, indent=2))
-    print("\nReport written to %s" % args.out)
+    try:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(json.dumps(report, indent=2))
+        print("\nReport written to %s" % args.out)
+    except OSError as exc:
+        # /app is read-only in the container (same reason coverage writes to /tmp).
+        # The printed metrics are the primary result; the JSON artifact is optional.
+        print("\nCould not write report to %s (%s). "
+              "Pass --out to a writable path (e.g. /tmp/eval_reports/search.json)." % (args.out, exc))
 
 
 if __name__ == "__main__":

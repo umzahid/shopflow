@@ -42,9 +42,15 @@ def main() -> None:
     print("\nprecision=%.4f recall=%.4f f1=%.4f accuracy=%.4f roc_auc=%.4f"
           % (m["precision"], m["recall"], m["f1"], m["accuracy"], m["roc_auc"]))
 
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(report, indent=2))
-    print("\nReport written to %s" % args.out)
+    try:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(json.dumps(report, indent=2))
+        print("\nReport written to %s" % args.out)
+    except OSError as exc:
+        # /app is read-only in the container (same reason coverage writes to /tmp).
+        # The printed metrics are the primary result; the JSON artifact is optional.
+        print("\nCould not write report to %s (%s). "
+              "Pass --out to a writable path (e.g. /tmp/eval_reports/fraud.json)." % (args.out, exc))
 
 
 if __name__ == "__main__":
