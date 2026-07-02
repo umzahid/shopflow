@@ -84,6 +84,10 @@ _client = None
 def _get_client():  # pragma: no cover - needs anthropic + network
     global _client
     if _client is None:
+        if not settings.ANTHROPIC_API_KEY:
+            # Without this guard the SDK raises TypeError at request-build time,
+            # which bypasses the APIStatusError handlers and surfaces as a 500.
+            raise CopilotError("The copilot is not configured on this deployment.", 503)
         from anthropic import AsyncAnthropic
 
         _client = AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
