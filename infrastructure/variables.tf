@@ -75,3 +75,15 @@ variable "cdn_acm_certificate_arn" {
   type        = string
   default     = null
 }
+
+variable "cdn_web_acl_id" {
+  description = "Optional WAFv2 web ACL ARN (us-east-1) to associate with the CDN. Null disables WAF."
+  type        = string
+  default     = null
+}
+
+variable "cdn_log_bucket_domain_name" {
+  description = "Optional S3 bucket domain for CloudFront access logs. Null disables logging."
+  type        = string
+  default     = null
+}

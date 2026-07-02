@@ -130,6 +130,14 @@ resource "aws_cloudfront_distribution" "this" {
   }
 
   tags = merge(var.tags, { Name = "${var.name}-cdn" })
+
+  lifecycle {
+    precondition {
+      # CloudFront rejects custom domain aliases on the default certificate.
+      condition     = length(var.aliases) == 0 || var.acm_certificate_arn != null
+      error_message = "aliases require acm_certificate_arn — the default CloudFront certificate cannot serve custom domains."
+    }
+  }
 }
 
 # --- Bucket policy: allow the distribution read via OAC ---

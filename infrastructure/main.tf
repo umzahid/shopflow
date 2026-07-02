@@ -39,8 +39,10 @@ module "compute" {
 module "cdn" {
   source = "./modules/cdn"
 
-  name                = local.name
-  price_class         = var.cdn_price_class
-  aliases             = var.cdn_aliases
-  acm_certificate_arn = var.cdn_acm_certificate_arn
+  name                   = local.name
+  price_class            = var.cdn_price_class
+  aliases                = var.cdn_aliases
+  acm_certificate_arn    = var.cdn_acm_certificate_arn
+  web_acl_id             = var.cdn_web_acl_id
+  log_bucket_domain_name = var.cdn_log_bucket_domain_name
 }
