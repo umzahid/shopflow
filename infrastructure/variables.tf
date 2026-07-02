@@ -23,9 +23,9 @@ variable "vpc_cidr" {
 }
 
 variable "az_count" {
-  description = "Number of Availability Zones."
+  description = "Number of Availability Zones. 2 keeps NAT/subnet footprint minimal for dev."
   type        = number
-  default     = 3
+  default     = 2
 }
 
 variable "single_nat_gateway" {
@@ -41,9 +41,9 @@ variable "cluster_version" {
 }
 
 variable "node_instance_types" {
-  description = "Worker node instance types."
+  description = "Worker node instance types. t3.small is the practical EKS minimum (ENI pod limits); size up for the ML features."
   type        = list(string)
-  default     = ["t3.large"]
+  default     = ["t3.small"]
 }
 
 variable "endpoint_public_access" {

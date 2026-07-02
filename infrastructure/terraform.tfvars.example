@@ -6,11 +6,13 @@ project     = "shopflow"
 environment = "dev"
 
 vpc_cidr           = "10.0.0.0/16"
-az_count           = 3
+az_count           = 2 # minimum for EKS; keeps subnet/NAT footprint small
 single_nat_gateway = true
 
-cluster_version     = "1.30"
-node_instance_types = ["t3.large"]
+cluster_version = "1.30"
+# t3.small = practical EKS minimum. NOTE: EKS is NEVER free-tier (~$73/mo
+# control plane + ~$32/mo NAT). For a $0 deployment see docs/aws-free-tier.md.
+node_instance_types = ["t3.small"]
 
 # Set false for prod (reach the API via VPN/bastion inside the VPC).
 endpoint_public_access = true

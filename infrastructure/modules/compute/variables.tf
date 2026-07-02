@@ -29,25 +29,25 @@ variable "public_access_cidrs" {
 variable "node_instance_types" {
   description = "EC2 instance types for the managed node group."
   type        = list(string)
-  default     = ["t3.large"]
+  default     = ["t3.small"]
 }
 
 variable "node_desired_size" {
   description = "Desired worker node count."
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "node_min_size" {
   description = "Minimum worker node count."
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "node_max_size" {
   description = "Maximum worker node count."
   type        = number
-  default     = 4
+  default     = 2
 }
 
 variable "node_capacity_type" {
