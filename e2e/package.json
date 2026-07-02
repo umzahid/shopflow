@@ -1,0 +1,14 @@
+{
+  "name": "shopflow-e2e",
+  "private": true,
+  "description": "Playwright E2E automation suite for ShopFlow (Domain 6, Entry 30)",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.48.2"
+  }
+}
