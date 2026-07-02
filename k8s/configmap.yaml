@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: shopflow-config
+  namespace: shopflow
+data:
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "info"
+  COOKIE_SECURE: "true"
+  CORS_ORIGINS: '["https://shopflow.example.com"]'
+  NEXT_PUBLIC_API_URL: "https://shopflow.example.com/api/v1"

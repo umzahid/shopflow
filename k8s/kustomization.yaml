@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: shopflow
+
+labels:
+  - includeSelectors: false
+    pairs:
+      app.kubernetes.io/part-of: shopflow
+      app.kubernetes.io/managed-by: kustomize
+
+resources:
+  - namespace.yaml
+  - serviceaccount.yaml
+  - configmap.yaml
+  - backend.yaml
+  - frontend.yaml
+
+images:
+  - name: shopflow-backend
+    newName: <account-id>.dkr.ecr.<region>.amazonaws.com/shopflow-backend
+    newTag: latest
+  - name: shopflow-frontend
+    newName: <account-id>.dkr.ecr.<region>.amazonaws.com/shopflow-frontend
+    newTag: latest
