@@ -28,10 +28,10 @@ module "networking" {
 module "compute" {
   source = "./modules/compute"
 
-  cluster_name        = local.cluster_name
-  cluster_version     = var.cluster_version
-  vpc_id              = module.networking.vpc_id
-  private_subnet_ids  = module.networking.private_subnet_ids
-  public_access_cidrs = var.public_access_cidrs
-  node_instance_types = var.node_instance_types
+  cluster_name           = local.cluster_name
+  cluster_version        = var.cluster_version
+  private_subnet_ids     = module.networking.private_subnet_ids
+  endpoint_public_access = var.endpoint_public_access
+  public_access_cidrs    = var.public_access_cidrs
+  node_instance_types    = var.node_instance_types
 }

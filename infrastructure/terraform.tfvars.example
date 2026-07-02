@@ -12,5 +12,7 @@ single_nat_gateway = true
 cluster_version     = "1.30"
 node_instance_types = ["t3.large"]
 
+# Set false for prod (reach the API via VPN/bastion inside the VPC).
+endpoint_public_access = true
 # Restrict this to your office / VPN egress CIDRs before a real apply.
 public_access_cidrs = ["0.0.0.0/0"]

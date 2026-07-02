@@ -9,18 +9,19 @@ variable "cluster_version" {
   default     = "1.30"
 }
 
-variable "vpc_id" {
-  description = "VPC the cluster is deployed into."
-  type        = string
-}
-
 variable "private_subnet_ids" {
   description = "Private subnet ids for the cluster ENIs and worker nodes."
   type        = list(string)
 }
 
+variable "endpoint_public_access" {
+  description = "Expose the EKS API endpoint publicly. Private access is always on; set this false for prod (access via VPN/bastion inside the VPC)."
+  type        = bool
+  default     = true
+}
+
 variable "public_access_cidrs" {
-  description = "CIDRs allowed to reach the public EKS API endpoint. RESTRICT before a real apply — the default is permissive for convenience only."
+  description = "CIDRs allowed to reach the public EKS API endpoint (only applies when endpoint_public_access is true). RESTRICT before a real apply — the default is permissive for convenience only."
   type        = list(string)
   default     = ["0.0.0.0/0"]
 }

@@ -3,7 +3,7 @@ data "aws_partition" "current" {}
 # --- KMS key for EKS secrets envelope encryption ---
 resource "aws_kms_key" "eks" {
   description             = "EKS secrets envelope encryption for ${var.cluster_name}"
-  deletion_window_in_days = 7
+  deletion_window_in_days = 30
   enable_key_rotation     = true
   tags                    = merge(var.tags, { Name = "${var.cluster_name}-eks-kms" })
 }
@@ -44,8 +44,8 @@ resource "aws_eks_cluster" "this" {
   vpc_config {
     subnet_ids              = var.private_subnet_ids
     endpoint_private_access = true
-    endpoint_public_access  = true
-    public_access_cidrs     = var.public_access_cidrs
+    endpoint_public_access  = var.endpoint_public_access
+    public_access_cidrs     = var.endpoint_public_access ? var.public_access_cidrs : null
   }
 
   encryption_config {
@@ -68,9 +68,10 @@ data "tls_certificate" "oidc" {
 }
 
 resource "aws_iam_openid_connect_provider" "oidc" {
-  url             = aws_eks_cluster.this.identity[0].oidc[0].issuer
-  client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = [data.tls_certificate.oidc.certificates[0].sha1_fingerprint]
+  url            = aws_eks_cluster.this.identity[0].oidc[0].issuer
+  client_id_list = ["sts.amazonaws.com"]
+  # Root CA of the OIDC issuer chain (last cert), not the leaf.
+  thumbprint_list = [data.tls_certificate.oidc.certificates[length(data.tls_certificate.oidc.certificates) - 1].sha1_fingerprint]
   tags            = var.tags
 }
 
@@ -135,20 +136,26 @@ resource "aws_eks_node_group" "this" {
 }
 
 # --- Core managed addons ---
+# vpc-cni and kube-proxy must exist FOR the nodes (pod networking / kube-proxy),
+# so they are created before the node group — no depends_on the node group.
+# coredns runs as pods and needs schedulable nodes, so it waits for the node
+# group. OVERWRITE resolves conflicts with the self-managed addons a fresh
+# cluster ships with.
 resource "aws_eks_addon" "vpc_cni" {
-  cluster_name = aws_eks_cluster.this.name
-  addon_name   = "vpc-cni"
-  depends_on   = [aws_eks_node_group.this]
-}
-
-resource "aws_eks_addon" "coredns" {
-  cluster_name = aws_eks_cluster.this.name
-  addon_name   = "coredns"
-  depends_on   = [aws_eks_node_group.this]
+  cluster_name                = aws_eks_cluster.this.name
+  addon_name                  = "vpc-cni"
+  resolve_conflicts_on_create = "OVERWRITE"
 }
 
 resource "aws_eks_addon" "kube_proxy" {
-  cluster_name = aws_eks_cluster.this.name
-  addon_name   = "kube-proxy"
-  depends_on   = [aws_eks_node_group.this]
+  cluster_name                = aws_eks_cluster.this.name
+  addon_name                  = "kube-proxy"
+  resolve_conflicts_on_create = "OVERWRITE"
+}
+
+resource "aws_eks_addon" "coredns" {
+  cluster_name                = aws_eks_cluster.this.name
+  addon_name                  = "coredns"
+  resolve_conflicts_on_create = "OVERWRITE"
+  depends_on                  = [aws_eks_node_group.this]
 }

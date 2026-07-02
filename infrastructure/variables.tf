@@ -46,8 +46,14 @@ variable "node_instance_types" {
   default     = ["t3.large"]
 }
 
+variable "endpoint_public_access" {
+  description = "Expose the EKS API endpoint publicly. Private access is always on; set false for prod."
+  type        = bool
+  default     = true
+}
+
 variable "public_access_cidrs" {
-  description = "CIDRs allowed to reach the public EKS API endpoint. Restrict before a real apply."
+  description = "CIDRs allowed to reach the public EKS API endpoint (only when endpoint_public_access is true). Restrict before a real apply."
   type        = list(string)
   default     = ["0.0.0.0/0"]
 }
