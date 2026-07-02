@@ -486,11 +486,17 @@ Target: **30+ entries** covering all 6 domains for full marks (45–50 pts).
 
 ### Entry 27
 - **Task Reference:** Domain 5 – Task 27 (AI product description generator)
-- **Tool Used:** Claude
-- **Prompt (verbatim):**
-- **Output Quality (1–5):**
+- **Tool Used:** Claude Code (Opus 4.8) — "superpowers" workflow: brainstorming → design spec → writing-plans → subagent-driven-development (fresh implementer + reviewer subagent per task).
+- **Prompt (verbatim):** _[Umair: confirm exact wording]_ "brainstorm and write a plan for the AI product description generator (Entry 27), then implement it subagent-driven."
+- **Output Quality (1–5):** _(Umair to rate)_
 - **What You Changed:**
-- **What You Learned:**
+  - `docs/superpowers/specs/2026-07-02-ai-product-descriptions-design.md` + `docs/superpowers/plans/2026-07-02-ai-product-descriptions.md` — approved design spec and 4-task TDD implementation plan.
+  - `backend/app/core/config.py` — `DESCRIPTION_MODEL="claude-opus-4-8"`, `DESCRIPTION_MAX_VARIANTS=3`.
+  - `backend/app/schemas/descriptions.py` — `ToneEnum` {professional, playful, luxury, minimal}, `LengthEnum` {short, medium, long}, `DescriptionRequest` (title/category/key_features/tone/length with defaults), `DescriptionResponse{variants}`.
+  - `backend/app/services/descriptions.py` — one non-agentic `claude-opus-4-8` call using structured outputs; `generate_descriptions()` clamps to `DESCRIPTION_MAX_VARIANTS`; `set_generator()` swap hook + `SHOPFLOW_FAKE_DESCRIPTIONS=1` toggle + deterministic `_fake_generate` keep Anthropic out of CI; `_anthropic_generate` lazily imports `AsyncAnthropic` and is `# pragma: no cover`; `DescriptionError` → RFC 7807 (503 rate-limit / 502 unavailable / unreadable).
+  - `backend/app/api/merchant.py` — `POST /merchant/generate-description` (merchant-role-gated), stateless (creates/mutates no product row); empty title → 400; `DescriptionError` → 503/502.
+  - `backend/tests/conftest.py` — `_reset_description_generator` autouse fixture. Tests: `test_descriptions_schemas.py`, `test_descriptions_service.py` (fake/clamp/swap-hook), `test_descriptions_endpoint.py` (role guard, empty title, happy path, statelessness). Full suite **183 passed, coverage 78.69%** (gate 70%), flake8 clean.
+- **What You Learned:** Structured outputs (`output_config.format` JSON schema) make variant parsing deterministic instead of scraping free text — but `anthropic==0.69.0` still has no named `output_config` kwarg (carried over from Entry 26), so it must go via `extra_body` to reach the wire. Keeping the endpoint stateless (text only, no DB write) means the merchant saves a chosen variant through the normal product create/update flow — proven by a statelessness test asserting the product-row count is unchanged. The `set_generator()` swap hook + `SHOPFLOW_FAKE_DESCRIPTIONS` toggle (same pattern as forecast/fraud/copilot) let the whole feature test end-to-end with zero network. **Deploy note:** production sets `ANTHROPIC_API_KEY` and must NOT set `SHOPFLOW_FAKE_DESCRIPTIONS=1`.
 
 ### Entry 28
 - **Task Reference:** Domain 5 – Task 28 (Evaluation harness — search NDCG + fraud confusion matrix)
