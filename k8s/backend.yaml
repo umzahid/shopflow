@@ -6,7 +6,7 @@ metadata:
   labels:
     app.kubernetes.io/name: backend
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: backend
@@ -18,8 +18,9 @@ spec:
       serviceAccountName: backend-sa
       securityContext:
         runAsNonRoot: true
-        runAsUser: 1000
-        fsGroup: 1000
+        # Matches the image's appuser (backend/Dockerfile: useradd -u 1001).
+        runAsUser: 1001
+        fsGroup: 1001
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -47,11 +48,11 @@ spec:
             periodSeconds: 15
           resources:
             requests:
-              cpu: 250m
-              memory: 512Mi
+              cpu: 200m
+              memory: 256Mi
             limits:
-              cpu: "1"
-              memory: 1Gi
+              cpu: 500m
+              memory: 768Mi
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -61,8 +62,14 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            # Writable cache under RO root — sentence-transformers/HF model
+            # downloads land in ~/.cache when the real encoder is enabled.
+            - name: cache
+              mountPath: /home/appuser/.cache
       volumes:
         - name: tmp
+          emptyDir: {}
+        - name: cache
           emptyDir: {}
 ---
 apiVersion: v1
@@ -72,6 +79,9 @@ metadata:
   namespace: shopflow
   labels:
     app.kubernetes.io/name: backend
+  annotations:
+    # Per-target-group ALB health check for this service's target group.
+    alb.ingress.kubernetes.io/healthcheck-path: /health
 spec:
   type: ClusterIP
   selector:
@@ -91,8 +101,8 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: backend
-  minReplicas: 3
-  maxReplicas: 10
+  minReplicas: 1
+  maxReplicas: 3
   metrics:
     - type: Resource
       resource:

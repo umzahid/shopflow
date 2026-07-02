@@ -24,7 +24,10 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: frontend
-        - namespaceSelector: {}
+        # ALB targets pods directly (target-type: ip), so traffic arrives from
+        # the ALB ENI IPs in the VPC — matched by CIDR, not a namespaceSelector.
+        - ipBlock:
+            cidr: 10.0.0.0/16
       ports:
         - protocol: TCP
           port: 8000
@@ -42,7 +45,9 @@ spec:
     - Ingress
   ingress:
     - from:
-        - namespaceSelector: {}
+        # ALB ENI IPs (target-type: ip) — VPC CIDR, matches modules/networking.
+        - ipBlock:
+            cidr: 10.0.0.0/16
       ports:
         - protocol: TCP
           port: 3000
