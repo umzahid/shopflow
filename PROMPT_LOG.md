@@ -380,11 +380,13 @@ Target: **30+ entries** covering all 6 domains for full marks (45–50 pts).
 
 ### Entry 19
 - **Task Reference:** Domain 4 – Task 19 (Well-Architected Review on Terraform)
-- **Tool Used:** Claude
-- **Prompt (verbatim):**
-- **Output Quality (1–5):**
+- **Tool Used:** Claude Code (Opus 4.8 / Fable 5) — direct analysis write-up grounded in the actual modules (no subagent pipeline; document deliverable).
+- **Prompt (verbatim):** _[Umair: confirm exact wording]_ "continue with E19 and E22".
+- **Output Quality (1–5):** _(Umair to rate)_
 - **What You Changed:**
-- **What You Learned:**
+  - `docs/well-architected-review.md` — six-pillar review of `infrastructure/` + `k8s/` at commit `eb0ae60`, every claim cited to file/resource. Explicitly framed: **drafted-in-code, validated offline, never applied — nothing verified against running infrastructure.**
+  - Findings include the two items deliberately deferred from the E18 whole-feature review (no EKS access entries [H] — creator-only cluster access; no custom node SG [M]), plus: single-NAT AZ SPOF [H, documented trade-off], public API endpoint default [M], no PDB/topologySpread/cluster-autoscaler [M], IaC not in CI [M], burstable nodes vs ML workloads [M], unpinned addon versions [L], inert state backend [L]. Ends with a prioritized 8-item action list.
+- **What You Learned:** Doing the WA review *after* adversarial per-feature reviews changes its character — most point-in-time security findings were already fixed in hardening commits, so the review surfaces *architectural* debt instead (access entries, autoscaling, CI integration, HA trade-offs). Writing it against specific `file:resource` references keeps it falsifiable, and the honesty framing (drafted ≠ deployed ≠ verified) matters because a reviewer can't tell from a doc alone whether controls exist anywhere but paper.
 
 ### Entry 20
 - **Task Reference:** Domain 4 – Task 20 (CloudFront distribution config)
@@ -412,11 +414,14 @@ Target: **30+ entries** covering all 6 domains for full marks (45–50 pts).
 
 ### Entry 22
 - **Task Reference:** Domain 4 – Task 22 (Cost optimization analysis from infracost)
-- **Tool Used:** Claude
-- **Prompt (verbatim):**
-- **Output Quality (1–5):**
+- **Tool Used:** Claude Code (Opus 4.8 / Fable 5) — hand-computed analysis; **infracost itself was NOT run** (its pricing API needs a free key that isn't configured). The doc records the exact `infracost breakdown` Docker command to re-generate properly, and flags all figures as verify-against-pricing-pages.
+- **Prompt (verbatim):** _[Umair: confirm exact wording]_ "continue with E19 and E22" (building on the earlier "make this project light to run on aws as I just have free tiers").
+- **Output Quality (1–5):** _(Umair to rate)_
 - **What You Changed:**
-- **What You Learned:**
+  - `docs/cost-optimization.md` — per-resource monthly breakdown of the stack at current defaults (**≈$153–165/mo idle**, dominated by the untunable EKS control plane ~$73 + NAT ~$33 + the 2024 public-IPv4 charges), table of optimizations already applied in this repo's history, ranked lever list (SPOT −70% on nodes via the existing `node_capacity_type` var, Graviton, trimmed log types, free S3 gateway endpoint, fck-nat, scale-to-zero, destroy-between-demos ≈ $5–6/demo-day), and a cheaper-architectures comparison (compose-on-EC2 ≈ $0 → ECS → Lightsail → App Runner → EKS).
+  - **Applied the top code-level finding**: `aws_s3_bucket_lifecycle_configuration` on the CDN origin (expire noncurrent versions 30d, abort incomplete multipart 7d) — versioning without expiry grows storage without bound. `terraform fmt` clean + `validate` Success.
+  - Cross-links `docs/aws-free-tier.md` (the $0 path) and the E19 review's cost pillar.
+- **What You Learned:** The honest infracost story is worth more than a faked one — documenting *why* the tool didn't run (API key) plus the exact command beats hand-waving. Cost structure insight: on a minimum EKS stack the control plane + NAT are ~70% of spend and no instance-sizing lever touches them — the only real levers are architectural (don't run EKS) or temporal (destroy when idle). Also: the 2024 change charging for *all* public IPv4 (~$3.65/mo each) quietly adds ~$11/mo to a NAT+ALB stack — easy to miss in older estimates. And versioning-without-lifecycle is a classic silent cost leak that `terraform validate` will never flag.
 
 ---
 
