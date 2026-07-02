@@ -536,19 +536,25 @@ Target: **30+ entries** covering all 6 domains for full marks (45–50 pts).
 
 ### Entry 29
 - **Task Reference:** Domain 6 – Task 34 (Backend unit test suite)
-- **Tool Used:** Copilot
-- **Prompt (verbatim):**
-- **Output Quality (1–5):**
+- **Tool Used:** Claude Code — the suite was built incrementally across Domains 1–5 (every feature landed TDD with its own tests); this entry closed the last coverage gap.
+- **Prompt (verbatim):** _[Umair: confirm exact wording]_ "for QE, complete BE test suite".
+- **Output Quality (1–5):** _(Umair to rate)_
 - **What You Changed:**
-- **What You Learned:**
+  - The suite as it stands: **205 tests** (unit + integration), **82% coverage** (CI gate 70%), flake8-clean, against a **real Postgres** (`shopflow_test`, truncate-between-tests, no mocking) with deterministic fakes for every external dependency (embeddings, Prophet, LightGBM, Anthropic — swap hooks + `SHOPFLOW_FAKE_*` toggles keep CI network-free).
+  - Gap closed this entry: `tests/integration/test_coupon_service.py` (9 tests) — `app/services/coupon.py` was the weakest file at **34%**; now **97%**. Covers percentage/flat/capped-at-subtotal discounts, all four rejection gates (unknown, inactive, expired, usage-limit — including that a failed apply does NOT increment usage), and `release_coupon` (decrement + zero floor).
+- **What You Learned:** The atomic single-UPDATE coupon design (gates in the WHERE clause, RETURNING for the row) is elegant but its error-diagnosis fallback block is exactly the kind of code coverage reports catch going untested — the happy path worked for weeks while 4 of 5 error branches had never executed. Testing "failure must not increment usage" required asserting on the DB row, not the exception — behavior tests beat exception-message tests for concurrency-sensitive code.
 
 ### Entry 30
 - **Task Reference:** Domain 6 – Task 35 (Playwright E2E test scripts)
-- **Tool Used:** Claude
-- **Prompt (verbatim):**
-- **Output Quality (1–5):**
+- **Tool Used:** Claude Code (Fable 5) — suite authored directly; locators discovered from the live rendered DOM via the new project skill's fallback path (SSR fetch + component-source analysis), since no Playwright MCP server was connected yet.
+- **Prompt (verbatim):** _[Umair: confirm exact wording]_ "for playwright E2E, make an automation suite that contains steps and test cases. For locator finding make a workflow/skill that can access playwright mcp and open browser and go to the page and find locators for steps and write locators in automation suite."
+- **Output Quality (1–5):** _(Umair to rate)_
 - **What You Changed:**
-- **What You Learned:**
+  - `e2e/` — Playwright automation suite: page objects (`pages/*.page.ts` — locators ONLY, parameterized aria-labels as functions like `removeItem(title)`), step-structured specs (`tests/*.spec.ts`, `test.step()` per step), API-arrange helpers (`helpers/api.ts` — accounts/products seeded via the backend so the UI layer only tests UI), `playwright.config.ts`, README with the TC-01..08 test-case matrix.
+  - **8 test cases, 8/8 passing (10.7s)**: register, wrong-password, login/logout, home search, price filter + detail, add-to-cart, cart stepper/remove, and the **full purchase journey** (sign in → cart → checkout form → live fraud scoring → `/orders/{uuid}`).
+  - `.claude/skills/find-locators/SKILL.md` — the locator workflow: drive a real browser via **Playwright MCP** (`browser_navigate` → `browser_snapshot` a11y tree → derive locators in strict priority `getByRole` > `getByLabel` > `getByPlaceholder` > `getByText`, never nth/positional; reach stateful UI by interacting first) → write into `e2e/pages/` → verify with `--list`. Fallback documented + used for this baseline: SSR fetch for server-rendered pages, component-source for client-rendered ones (`/cart`, `/checkout`).
+  - Runs with zero local node: official `mcr.microsoft.com/playwright` image, `--network host` (the client bundle bakes `localhost:8000` as its API base, so the in-container browser must see the host's localhost).
+- **What You Learned:** Locators must come from the *rendered* DOM, not guesses — this app has zero `data-testid`s but rich parameterized aria-labels, which map naturally to page-object *functions*. The debugging journal is the lesson list: (1) Pydantic `EmailStr` rejects special-use TLDs — `@e2e.local` test emails 422'd every single test; (2) strict-mode violations are informative — "Your cart" also matched the transient "Loading your cart…" heading (`exact: true`), and a same-millisecond `Date.now()` title collision across parallel workers surfaced as "resolved to 2 elements"; (3) client-side API base URLs are baked at build time in Next.js, so the browser's network context (not the test runner's) decides reachability — the reason `--network host` beats `host.docker.internal` here; (4) API-arrange/UI-act keeps 8 E2E cases at ~11s total.
 
 ### Entry 31
 - **Task Reference:** Domain 6 – Task 36 (k6 performance test scripts)
