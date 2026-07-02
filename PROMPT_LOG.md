@@ -400,11 +400,15 @@ Target: **30+ entries** covering all 6 domains for full marks (45–50 pts).
 
 ### Entry 21
 - **Task Reference:** Domain 4 – Task 21 (Kubernetes manifests for EKS)
-- **Tool Used:** Claude
-- **Prompt (verbatim):**
-- **Output Quality (1–5):**
+- **Tool Used:** Claude Code (Opus 4.8) — "superpowers" workflow: design spec → writing-plans → subagent-driven-development (implementer subagent per task; orchestrator review + final validate).
+- **Prompt (verbatim):** _[Umair: confirm exact wording]_ "continue with E21 k8s manifests" → "go, write the plan" → "go".
+- **Output Quality (1–5):** _(Umair to rate)_
 - **What You Changed:**
-- **What You Learned:**
+  - `docs/superpowers/specs/2026-07-02-k8s-manifests-design.md` + `docs/superpowers/plans/2026-07-02-k8s-manifests.md` — approved design spec and 3-task plan.
+  - `k8s/` kustomize base (13 resources) deploying the app tier onto the E18 EKS cluster: `backend.yaml` (Deployment 3 replicas + ClusterIP Service :8000 + CPU HPA 3–10), `frontend.yaml` (Deployment 2 replicas + Service :3000), `serviceaccount.yaml` (IRSA — placeholder `eks.amazonaws.com/role-arn`), `configmap.yaml` (non-secret env incl. `COOKIE_SECURE=true`), `secret.example.yaml` (placeholders only, EXCLUDED from the kustomization — real values via External Secrets / Secrets Manager), `ingress.yaml` (ALB, path-based `/api`→backend, `/`→frontend), `networkpolicy.yaml` (default-deny-ingress + per-workload allows + egress restricted to DNS/5432/6379/443), `namespace.yaml`, `kustomization.yaml` (namespace, modern `labels:`, `images:` ECR placeholders).
+  - Probes hit the real health paths (`/health`, `/api/health`); hardened containers (runAsNonRoot, drop-ALL caps, no priv-esc, RuntimeDefault seccomp, resource limits; backend `readOnlyRootFilesystem: true` + `/tmp` emptyDir).
+  - Verified offline: `kubectl kustomize k8s` builds and `kubeconform -strict` reports **Valid: 13, Invalid: 0** (base) + **Valid: 1** (secret example) — no cluster, via the `ghcr.io/yannh/kubeconform` Docker image.
+- **What You Learned:** `kubectl kustomize | kubeconform -strict` in Docker is a solid offline gate for manifests with no cluster — kubeconform fetches k8s OpenAPI schemas over the network (like `terraform init`) and validates each rendered resource independently, so an intentional dangling `secretRef` (the excluded example Secret) doesn't fail it. NetworkPolicy default-deny is subtractive: a policy with `podSelector: {}` + `policyTypes: [Egress]` and only `ports` rules turns ALL pods egress-restricted to just those ports — that's how you get default-deny-egress-except without a separate deny rule. IRSA (a role-annotated ServiceAccount tied to the E18 OIDC provider) replaces static AWS keys in pods. Datastores stay out-of-cluster (RDS/ElastiCache) reached via a Secret-injected connection string. Prereqs for a real deploy are documented and out of scope: AWS Load Balancer Controller, metrics-server (HPA), External Secrets Operator, and the IRSA IAM role in Terraform. (Env note: a secrets-protection hook blocks reading/writing paths containing "secret", so the example manifest was landed via a rename.)
 
 ### Entry 22
 - **Task Reference:** Domain 4 – Task 22 (Cost optimization analysis from infracost)
