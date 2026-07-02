@@ -367,11 +367,16 @@ Target: **30+ entries** covering all 6 domains for full marks (45–50 pts).
 
 ### Entry 18
 - **Task Reference:** Domain 4 – Task 18 (Terraform VPC + EKS modules)
-- **Tool Used:** Claude
-- **Prompt (verbatim):**
-- **Output Quality (1–5):**
+- **Tool Used:** Claude Code (Opus 4.8) — "superpowers" workflow: design spec → writing-plans → subagent-driven-development (fresh implementer subagent per task; orchestrator review + final full-tree validate).
+- **Prompt (verbatim):** _[Umair: confirm exact wording]_ "start on Domain 4 AWS Terraform" → (approved scope: E18 foundation only) → "go, write the plan" → "go".
+- **Output Quality (1–5):** _(Umair to rate)_
 - **What You Changed:**
-- **What You Learned:**
+  - `docs/superpowers/specs/2026-07-02-terraform-vpc-eks-design.md` + `docs/superpowers/plans/2026-07-02-terraform-vpc-eks.md` — approved design spec and 4-task plan.
+  - `infrastructure/modules/networking/` — VPC (`enable_dns_hostnames`), 3-AZ public+private subnets via `cidrsubnet`, IGW, NAT (single-shared or per-AZ toggle), public/private route tables + associations, and EKS load-balancer subnet tags (`kubernetes.io/role/elb`, `internal-elb`, `cluster/<name>=shared`).
+  - `infrastructure/modules/compute/` — EKS cluster in private subnets with KMS-encrypted secrets (dedicated key, rotation on), control-plane audit logging (`api,audit,authenticator,controllerManager,scheduler`), IRSA OIDC provider (thumbprint via `tls_certificate`), a managed node group (private subnets, configurable ON_DEMAND/SPOT + scaling), least-privilege AWS-managed IAM policies (ARNs built via `data.aws_partition`), and core addons (vpc-cni/coredns/kube-proxy). Cluster CA output marked `sensitive`.
+  - `infrastructure/` root — `versions.tf` (terraform >=1.5, aws ~>5.60, tls ~>4.0), `variables.tf`, `main.tf` (provider `default_tags`; wires `module.networking` → `module.compute`), `outputs.tf`, `terraform.tfvars.example` (placeholders, no secrets), commented `backend.tf.example` (S3+DynamoDB).
+  - `.gitignore` — Terraform working dirs/state/real `.tfvars`. Verified offline in the `hashicorp/terraform:1.9` Docker image: `fmt -check -recursive` clean + `init -backend=false` + `validate` → "Success! The configuration is valid." across root + both modules (provider resolved aws v5.100.0).
+- **What You Learned:** `terraform init -backend=false` + `validate` in a Docker container is a clean way to type-check IaC with **zero AWS credentials and no remote backend** — `init` only needs registry egress to fetch providers, and `validate`/`fmt` are fully offline; keeping the S3 backend as `backend.tf.example` (not `backend.tf`) is what lets `init` fall back to the local backend. Provider v5 has sharp edges worth pinning against: `aws_eip` uses `domain = "vpc"` (not the removed `vpc = true`), and managed-policy ARNs should be built from `data.aws_partition.current.partition` rather than hardcoding `aws`. Security controls (KMS secrets encryption, control-plane audit logs, private-subnet nodes, IRSA workload identity) are cheap to bake in at authoring time and front-load the E19 Well-Architected review — but they are **drafted, not verified-as-deployed** (no `apply`). `apply`/`plan` are deliberately out of scope: unknown-value paths like the OIDC issuer only resolve at apply time.
 
 ### Entry 19
 - **Task Reference:** Domain 4 – Task 19 (Well-Architected Review on Terraform)

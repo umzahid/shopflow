@@ -59,3 +59,15 @@ backend/app/ml/artifacts/*.txt
 # Evaluation harness reports (Entry 28) — generated artifacts
 eval_reports/
 backend/eval_reports/
+
+# Terraform (Entry 18) — working dirs, state, and real tfvars (never commit secrets)
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+!*.tfvars.example
+override.tf
+override.tf.json
+.terraform.lock.hcl
