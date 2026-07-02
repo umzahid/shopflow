@@ -9,6 +9,7 @@ export class CartPage {
   readonly couponInput: Locator;
   readonly applyCouponButton: Locator;
   readonly proceedToCheckoutButton: Locator;
+  readonly emptyMessage: Locator;
 
   constructor(readonly page: Page) {
     // exact: true — "Your cart" would otherwise also match the transient
@@ -17,6 +18,7 @@ export class CartPage {
     this.couponInput = page.getByLabel("Coupon code");
     this.applyCouponButton = page.getByRole("button", { name: "Apply" });
     this.proceedToCheckoutButton = page.getByRole("button", { name: "Proceed to checkout" });
+    this.emptyMessage = page.getByText("Your cart is empty");
   }
 
   async goto() {

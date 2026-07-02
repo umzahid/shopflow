@@ -38,7 +38,7 @@ npm run report                        # open the HTML report
 Env overrides: `E2E_BASE_URL` (default `http://localhost:3000`),
 `E2E_API_URL` (default `http://localhost:8000/api/v1`).
 
-## Test cases
+## Test cases (22 — all passing)
 
 | ID | Case | Steps | Expected |
 |---|---|---|---|
@@ -49,7 +49,26 @@ Env overrides: `E2E_BASE_URL` (default `http://localhost:3000`),
 | TC-05 | Filter + detail | seed product → price filter includes/excludes → open detail | card appears/disappears with filter; detail add-to-cart enabled |
 | TC-06 | Add to cart | detail page → qty 2 → add | cart lists line, qty 2 |
 | TC-07 | Cart controls | arrange line → +/− stepper → remove | qty tracks stepper; line disappears on remove |
-| TC-08 | Full purchase | sign in → add to cart → checkout form → place order | redirect to `/orders/{uuid}` (live fraud scoring on the way) |
+| TC-08 | Full purchase | sign in → add to cart → checkout form → place order | `/orders/{uuid}` + "Thanks — your order is in." (live fraud scoring on the way) |
+| TC-09 | Duplicate email | arrange account → register same email via UI | stays on /register; `role=alert` |
+| TC-10 | Short password | register with 5-char password | registration does not complete; not signed in |
+| TC-11 | Session persistence | sign in → reload | still signed in (refresh-cookie boot) |
+| TC-12 | Auth guard | visit /checkout signed out → sign in | redirect `/login?next=%2Fcheckout`, then back to /checkout |
+| TC-13 | Empty search | search nonsense term | "No products matched" state |
+| TC-14 | Category tile | home → Electronics tile | `/products?q=electronics` |
+| TC-15 | Sold out | seed stock-0 product | card quick-add disabled "Sold out"; detail button disabled |
+| TC-16 | Detail qty cap | seed stock-2 → click + past cap | qty stops at 2 |
+| TC-17 | Empty cart | open /cart with nothing | "Your cart is empty" |
+| TC-18 | Cart persistence | add line → reload | line still present (localStorage) |
+| TC-19 | Multi-product cart | add two products | both lines listed; checkout enabled |
+| TC-20 | Cart qty cap | stock-2 line → + past cap | qty stops at 2 |
+| TC-21 | Invalid coupon | checkout with bogus code → place order | field `role=alert`; stays on /checkout |
+| TC-22 | Review renders | API: buy → deliver → review; open detail | 5-star label + review body visible |
+
+Coverage boundaries (deliberate): review *writing* has no UI (display-only —
+arranged via API); merchant analytics/copilot have no frontend routes (API-only,
+covered by the backend integration suite); valid-coupon checkout needs a seeded
+coupon and there is no coupon-creation API (covered by backend tests).
 
 ## Locator maintenance — the `find-locators` workflow
 

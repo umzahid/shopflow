@@ -108,5 +108,141 @@ test.describe("Cart & checkout journey", () => {
       // Checkout runs live fraud scoring server-side, then redirects.
       await expect(page).toHaveURL(/\/orders\/[0-9a-f-]{36}/, { timeout: 20_000 });
     });
+
+    await test.step("The order page confirms the purchase", async () => {
+      await expect(
+        page.getByRole("heading", { name: "Thanks — your order is in." }),
+      ).toBeVisible({ timeout: 15_000 });
+    });
+  });
+
+  test("TC-17: an empty cart shows the empty state", async ({ page }) => {
+    const cart = new CartPage(page);
+
+    await test.step("Open /cart with nothing in it", async () => {
+      await cart.goto();
+    });
+
+    await test.step("The empty-cart message is shown", async () => {
+      await expect(cart.emptyMessage).toBeVisible();
+    });
+  });
+
+  test("TC-18: the cart persists across a page reload (localStorage)", async ({
+    page,
+    request,
+  }) => {
+    const products = new ProductsPage(page);
+    const detail = new ProductDetailPage(page);
+    const cart = new CartPage(page);
+    let title: string;
+
+    await test.step("Arrange: a product is in the cart", async () => {
+      ({ title } = await seedProduct(request));
+      await products.goto(title);
+      await products.cardLink(title).click();
+      await detail.addToCartButton.click();
+      await cart.goto();
+      await expect(cart.lineItemLink(title)).toBeVisible();
+    });
+
+    await test.step("Reload — the line item is still there", async () => {
+      await page.reload();
+      await expect(cart.lineItemLink(title)).toBeVisible();
+    });
+  });
+
+  test("TC-19: two different products both appear in the cart", async ({ page, request }) => {
+    const products = new ProductsPage(page);
+    const detail = new ProductDetailPage(page);
+    const cart = new CartPage(page);
+    let a: string, b: string;
+
+    await test.step("Arrange: two products, each added from its detail page", async () => {
+      ({ title: a } = await seedProduct(request));
+      ({ title: b } = await seedProduct(request));
+      for (const t of [a, b]) {
+        await products.goto(t);
+        await products.cardLink(t).click();
+        await detail.addToCartButton.click();
+      }
+    });
+
+    await test.step("The cart lists both lines and checkout is available", async () => {
+      await cart.goto();
+      await expect(cart.lineItemLink(a)).toBeVisible();
+      await expect(cart.lineItemLink(b)).toBeVisible();
+      await expect(cart.proceedToCheckoutButton).toBeEnabled();
+    });
+  });
+
+  test("TC-20: the cart qty stepper is capped at the stock level", async ({
+    page,
+    request,
+  }) => {
+    const products = new ProductsPage(page);
+    const detail = new ProductDetailPage(page);
+    const cart = new CartPage(page);
+    let title: string;
+
+    await test.step("Arrange: stock-2 product in the cart (qty 1)", async () => {
+      ({ title } = await seedProduct(request, { stock_qty: 2 }));
+      await products.goto(title);
+      await products.cardLink(title).click();
+      await detail.addToCartButton.click();
+      await cart.goto();
+      await expect(cart.lineItemLink(title)).toBeVisible();
+    });
+
+    await test.step("Increase to the cap — qty stops at 2", async () => {
+      await cart.increaseQty(title).click();
+      await expect(cart.qtyValue(title)).toContainText("2");
+      await cart.increaseQty(title).click({ force: true }).catch(() => {});
+      await expect(cart.qtyValue(title)).toContainText("2");
+    });
+  });
+
+  test("TC-21: an invalid coupon at checkout shows a field error and blocks the order", async ({
+    page,
+    request,
+  }) => {
+    const login = new LoginPage(page);
+    const nav = new NavComponent(page);
+    const products = new ProductsPage(page);
+    const detail = new ProductDetailPage(page);
+    const cart = new CartPage(page);
+    const checkout = new CheckoutPage(page);
+    const email = uniqueEmail("e2e-coupon");
+    let title: string;
+
+    await test.step("Arrange: signed in with a product in the cart", async () => {
+      await registerUser(request, { email });
+      ({ title } = await seedProduct(request));
+      await login.goto();
+      await login.login(email, PASSWORD);
+      await expect(nav.signOutButton).toBeVisible({ timeout: 15_000 });
+      await products.goto(title);
+      await products.cardLink(title).click();
+      await detail.addToCartButton.click();
+      await cart.goto();
+      await cart.proceedToCheckoutButton.click();
+      await expect(page).toHaveURL(/\/checkout/);
+    });
+
+    await test.step("Place the order with a nonexistent coupon code", async () => {
+      await checkout.fillAddress({
+        street: "1 E2E Test Street",
+        city: "Islamabad",
+        postal: "44000",
+        country: "PK",
+      });
+      await checkout.couponInput.fill("NO-SUCH-COUPON");
+      await checkout.placeOrderButton.click();
+    });
+
+    await test.step("A coupon error is announced and we stay on /checkout", async () => {
+      await expect(page.getByRole("alert")).toBeVisible();
+      await expect(page).toHaveURL(/\/checkout/);
+    });
   });
 });

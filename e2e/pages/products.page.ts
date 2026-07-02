@@ -8,6 +8,7 @@ export class ProductsPage {
   readonly applyFiltersButton: Locator;
   readonly resetFiltersButton: Locator;
   readonly sortSelect: Locator;
+  readonly noResultsMessage: Locator;
 
   constructor(readonly page: Page) {
     this.heading = page.getByRole("heading", { name: "All products" });
@@ -16,6 +17,7 @@ export class ProductsPage {
     this.applyFiltersButton = page.getByRole("button", { name: "Apply" });
     this.resetFiltersButton = page.getByRole("button", { name: "Reset" });
     this.sortSelect = page.getByLabel("Sort by");
+    this.noResultsMessage = page.getByText(/No products matched/);
   }
 
   async goto(query?: string) {
@@ -48,6 +50,8 @@ export class ProductDetailPage {
   }
 
   heading(title: string): Locator {
-    return this.page.getByRole("heading", { name: title });
+    // exact + level 1: the listing's `Results for "<title>"` h1 and the card's
+    // h3 both contain the title — only the detail page has it as the exact h1.
+    return this.page.getByRole("heading", { name: title, exact: true, level: 1 });
   }
 }

@@ -62,4 +62,72 @@ test.describe("Browse & search", () => {
       await expect(detail.addToCartButton).toBeEnabled();
     });
   });
+
+  test("TC-13: a search with no matches shows the empty-results state", async ({ page }) => {
+    const products = new ProductsPage(page);
+
+    await test.step("Search for a nonsense term", async () => {
+      await products.goto(`zzz-no-such-thing-${Date.now()}`);
+    });
+
+    await test.step("The no-results message is shown", async () => {
+      await expect(products.noResultsMessage).toBeVisible();
+    });
+  });
+
+  test("TC-14: a home category tile navigates to a filtered listing", async ({ page }) => {
+    await test.step("Open the home page and follow a category tile", async () => {
+      await page.goto("/");
+      await page.getByRole("link", { name: "Electronics" }).click();
+    });
+
+    await test.step("Lands on /products with the category as the query", async () => {
+      await expect(page).toHaveURL(/\/products\?q=electronics/);
+    });
+  });
+
+  test("TC-15: a sold-out product cannot be added to the cart", async ({ page, request }) => {
+    const products = new ProductsPage(page);
+    const detail = new ProductDetailPage(page);
+    let title: string;
+
+    await test.step("Arrange: a product with zero stock (via API)", async () => {
+      ({ title } = await seedProduct(request, { stock_qty: 0 }));
+    });
+
+    await test.step("Its card quick-add is disabled and reads Sold out", async () => {
+      await products.goto(title);
+      await expect(products.cardAddToCart(title)).toBeDisabled();
+      await expect(products.cardAddToCart(title)).toHaveText(/Sold out/);
+    });
+
+    await test.step("The detail page add-to-cart is disabled too", async () => {
+      await products.cardLink(title).click();
+      await expect(detail.heading(title)).toBeVisible();
+      await expect(page.getByRole("button", { name: "Sold out" })).toBeDisabled();
+    });
+  });
+
+  test("TC-16: the detail qty stepper is capped at the stock level", async ({
+    page,
+    request,
+  }) => {
+    const products = new ProductsPage(page);
+    const detail = new ProductDetailPage(page);
+    let title: string;
+
+    await test.step("Arrange: a product with stock 2 (via API)", async () => {
+      ({ title } = await seedProduct(request, { stock_qty: 2 }));
+    });
+
+    await test.step("Clicking + past the stock stays at 2", async () => {
+      await products.goto(title);
+      await products.cardLink(title).click();
+      await expect(detail.heading(title)).toBeVisible();
+      await detail.increaseQty.click();
+      await detail.increaseQty.click({ force: true }).catch(() => {});
+      await detail.increaseQty.click({ force: true }).catch(() => {});
+      await expect(detail.quantityGroup).toContainText("2");
+    });
+  });
 });
