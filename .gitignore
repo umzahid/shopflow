@@ -55,3 +55,7 @@ backend/app/ml/artifacts/*.txt
 
 # Logs
 *.log
+
+# Evaluation harness reports (Entry 28) — generated artifacts
+eval_reports/
+backend/eval_reports/

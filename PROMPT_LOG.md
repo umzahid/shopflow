@@ -500,11 +500,17 @@ Target: **30+ entries** covering all 6 domains for full marks (45–50 pts).
 
 ### Entry 28
 - **Task Reference:** Domain 5 – Task 28 (Evaluation harness — search NDCG + fraud confusion matrix)
-- **Tool Used:** Claude
-- **Prompt (verbatim):**
-- **Output Quality (1–5):**
+- **Tool Used:** Claude Code (Opus 4.8) — "superpowers" workflow: brainstorming → design spec → writing-plans → subagent-driven-development (fresh implementer subagent per task; orchestrator review + final full-suite verification).
+- **Prompt (verbatim):** _[Umair: confirm exact wording]_ "recall last session and continue it" → (approved scope: both evaluators) → "go ahead, write the plan" → "go ahead and start the task".
+- **Output Quality (1–5):** _(Umair to rate)_
 - **What You Changed:**
-- **What You Learned:**
+  - `docs/superpowers/specs/2026-07-02-evaluation-harness-design.md` + `docs/superpowers/plans/2026-07-02-evaluation-harness.md` — approved design spec and 4-task TDD plan.
+  - `backend/app/eval/metrics.py` — hand-rolled, dependency-light metrics (no scikit-learn): `dcg_at_k`, `ndcg_at_k(ranked, ideal, k)`, `recall_at_k`, `confusion_matrix`, `classification_metrics` (precision/recall/F1/accuracy, zero-safe), `roc_auc` (Mann–Whitney with average-rank tie handling). `app/eval/__init__.py` new package.
+  - `backend/app/eval/search_eval.py` — `seed_search_corpus` (inserts a graded product corpus under a dedicated eval merchant, encode-on-write) + `evaluate_search` (runs each golden query through the existing `_lexical/_semantic/_hybrid_search` helpers, computes mean NDCG@k + recall@k per mode). `backend/app/eval/data/search_golden.json` — 12-product corpus + 11 graded queries.
+  - `backend/app/eval/fraud_eval.py` — `evaluate_fraud` reuses `train_fraud_model._generate_dataset` for a deterministic synthetic holdout, scores via the production `score_order`, reports the confusion matrix + P/R/F1/accuracy + ROC-AUC at `REVIEW_THRESHOLD`.
+  - `backend/app/scripts/eval_search.py` + `backend/app/scripts/eval_fraud.py` — run-once CLIs (coverage-excluded) that print a table and write a JSON report to `eval_reports/`. Report write wrapped in `try/except OSError` (the container's `/app` is read-only) so a failed write warns instead of crashing after the metrics have printed.
+  - `backend/tests/unit/test_eval_metrics.py` (8, hand-computed values), `backend/tests/integration/test_eval_search_smoke.py` (2, fake encoder, shape-only), `backend/tests/unit/test_eval_fraud.py` (3, heuristic scorer). `.gitignore` — ignore `eval_reports/`. Full suite **196 passed, coverage 80.48%** (gate 70%; `app/eval/*` at 99%), flake8 clean.
+- **What You Learned:** An eval harness earns its keep the moment it runs — the sanity-run immediately surfaced two things. (1) A harness defect: the CLI crashed writing its JSON report because `/app` is read-only in the container (the same constraint that forces `COVERAGE_FILE=/tmp/.coverage`); the metrics had already printed, so the fix was to make the artifact write best-effort. (2) A model finding: the heuristic *fallback* scorer scores at precision 1.0 but recall ~0.01 at threshold 0.5 (ROC-AUC ~0.77 — it rank-orders fine, the threshold is just wrong for its score distribution), which is exactly the signal that the trained LightGBM booster (gitignored artifact) is required for usable recall. Also: meaningful semantic NDCG needs the real MiniLM encoder, so the search evaluator stays an **offline report, not a CI gate** — the fake-encoder smoke test asserts report *shape* only (semantic NDCG under fake embeddings was 0.54 vs lexical 0.86, confirming fake vectors are semantically random). Hand-rolling the metrics (matching the existing AUC convention) kept the disk/CUDA-sensitive image free of a scikit-learn pull.
 
 ---
 
