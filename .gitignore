@@ -71,3 +71,6 @@ crash.*.log
 override.tf
 override.tf.json
 .terraform.lock.hcl
+
+# k6 perf run outputs (Entry 31)
+perf/results/

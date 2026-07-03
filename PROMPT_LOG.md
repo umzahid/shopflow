@@ -559,10 +559,16 @@ Target: **30+ entries** covering all 6 domains for full marks (45–50 pts).
 ### Entry 31
 - **Task Reference:** Domain 6 – Task 36 (k6 performance test scripts)
 - **Tool Used:** Claude
-- **Prompt (verbatim):**
-- **Output Quality (1–5):**
+- **Prompt (verbatim):** "recall last session and check what has been done by reading repo and plan doc and give me brief detail about it and give me a plan of what is remaining and how to do it" → (plan proposed E31–E34 order) → "yes, start on E31"
+- **Output Quality (1–5):** _(Umair to rate)_
 - **What You Changed:**
-- **What You Learned:**
+  - `perf/k6/` — two k6 scenarios plus shared libs (`lib/api.js` API-arrange helpers mirroring `e2e/helpers/api.ts`, a 12-item seeded catalog with distinct vocabulary for lexical/semantic search, `lib/summary.js` stdout + JSON summary export):
+    - `smoke.js` — 1 VU / 60s, **paced to respect the stock `RATE_LIMIT_PUBLIC=100/minute`** (8 req/iteration + 5s sleep ≈ 75 req/min): health, list, detail, all 3 search modes, login, cart read; per-path p95 thresholds. **Result: 102/102 checks, 0 failed requests, all thresholds green** (p95s: health 6ms, list 20ms, detail 4ms, lexical 7ms, semantic 56ms, hybrid 768ms, login 345ms).
+    - `load.js` — ~4.5 min mixed traffic: anonymous `browse` scenario (ramping 0→15→25 VUs: list → detail → rotating-mode search) + authenticated `shop` scenario (0→5 VUs from a 10-shopper pre-registered pool: cart add → 30% checkout with **live LightGBM fraud scoring**); custom `orders_placed` / `orders_flagged_for_review` counters. **Result: 6,092 requests, 0 failures, 100% checks, ~21 req/s sustained; p95s: list 34ms, detail 7ms, lexical 25ms, semantic 69ms, hybrid 69ms, cart add 40ms, checkout 58ms; 111 orders placed, 4 fraud-flagged to `pending_review`.**
+  - `perf/docker-compose.perf.yml` — overlay raising `RATE_LIMIT_PUBLIC` for load runs only (recreate backend with the overlay before the run, `docker compose up -d backend` to restore after — done both ways this session).
+  - `perf/run.sh` — Dockerized runner (`grafana/k6` image, `--network host`, zero host node/k6 — same pattern and reasoning as the Playwright suite); writes full JSON summaries to gitignored `perf/results/`.
+  - `perf/README.md` — layout, the rate-limit constraint, scenario/threshold docs, and an "interpreting results" section (thresholds are draft dev-laptop SLOs, not production numbers).
+- **What You Learned:** (1) **Single-IP load testing collides with per-IP rate limiting by design** — slowapi keys on `get_remote_address` and every VU shares the host IP, so a stock-config load run measures the rate limiter, not the app; the honest answer is a smoke profile paced under the limit plus an explicit, documented overlay for load runs (never deployed). (2) **The first embedding encode after boot cold-loads MiniLM (~10–20s observed)** — it landed in setup both runs (product create → encode-on-write); warm up before measuring or the outlier pollutes the maxima. (3) Semantic/hybrid search are the CPU-bound paths (in-process query encoding) yet held p95 69ms at 21 rps on compose; lexical stays flat on Postgres tsvector. (4) Login's ~340ms is bcrypt's work factor — a security control to capacity-plan around, not a perf bug. (5) Checkout (transaction + stock decrement + live fraud scoring) held p95 58ms — the ML hot path is cheap once the booster is resident.
 
 ### Entry 32
 - **Task Reference:** Domain 6 – Task 37 (OWASP ZAP findings analysis)
