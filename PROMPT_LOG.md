@@ -581,15 +581,21 @@ Target: **30+ entries** covering all 6 domains for full marks (45–50 pts).
 ### Entry 33
 - **Task Reference:** Domain 6 – Task 38 (Test Plan document)
 - **Tool Used:** Claude
-- **Prompt (verbatim):**
-- **Output Quality (1–5):**
+- **Prompt (verbatim):** "complete domain 6 and let me know what is left" (test plan deliberately written LAST in the E31→E32→E34→E33 order so it documents the test layers that actually exist, with their real numbers)
+- **Output Quality (1–5):** _(Umair to rate)_
 - **What You Changed:**
-- **What You Learned:**
+  - `docs/test-plan.md` — full test plan synthesizing every layer as-built: objectives; explicit in/out-of-scope (with *reasons* — e.g. cloud runtime behavior is out because the free-tier constraint forbids applying the stack); per-level approach for unit/integration (205 tests, 82% cov, real-DB no-mocking policy, deterministic swap hooks at the ML/LLM boundary), E2E (22/22 Playwright, API-arrange/UI-act), performance (k6 smoke/load with latest numbers + the rate-limit overlay caveat), security (ZAP triage + Trivy + design-level controls tested in the backend suite), offline ML evaluation (deliberately not a CI gate), and the 8-stage CI pipeline; environment matrix (everything Dockerized shares the `--network host` rationale); entry/exit criteria; risk table derived from the actual bugs found (each BUG in `docs/bug-reports.md` maps to a risk class); Domain-6 traceability table; future work.
+- **What You Learned:** A test plan written *before* the testing exists is fiction; written after, it becomes an audit of coverage — the useful parts turned out to be the boundaries (what is deliberately NOT tested and why) and the risk table, both of which only exist because the bugs and constraints were real. Writing it last also exposed the one coherent thread across all six layers: every environment choice traces back to two constraints — no host tooling (everything runs from official Docker images) and single-IP rate limiting (which shaped k6 *and* ZAP).
 
 ### Entry 34
 - **Task Reference:** Domain 6 – Task 39 (Bug report writing)
 - **Tool Used:** Claude
-- **Prompt (verbatim):**
-- **Output Quality (1–5):**
+- **Prompt (verbatim):** "complete domain 6 and let me know what is left" (bug material selected from the project's own debugging journals rather than invented)
+- **Output Quality (1–5):** _(Umair to rate)_
 - **What You Changed:**
-- **What You Learned:**
+  - `docs/bug-reports.md` — four real, fixed defects in standard format (ID, severity/priority, component, environment, found-by, repro steps, expected/actual, root cause, fix commit, lesson), deliberately one per discovery method:
+    - **BUG-001** (Medium) — missing `ANTHROPIC_API_KEY` → SDK `TypeError` at client-construction bypassed the `APIStatusError` handlers → raw 500 instead of RFC 7807 503. Found by live endpoint sweep; fixed `dcebff0`.
+    - **BUG-002** (Critical) — bcrypt 5.x breaks passlib 1.7.4's import-time self-test → **silent** auth failure, no exception at request time. Found during dependency install; fixed by the documented `bcrypt==4.0.1` pin.
+    - **BUG-003** (High, deploy blocker) — frontend k8s liveness probe pointed at `/api/health`, a route that doesn't exist on the frontend (copied by analogy from the backend) → guaranteed CrashLoopBackOff. Found by adversarial manifest review + one live curl; fixed `9bb9ef2`.
+    - **BUG-004** (High, security) — "default-deny" NetworkPolicy used `namespaceSelector: {}` to admit ALB traffic, which in NetworkPolicy semantics matches **every namespace**. Found by security review; fixed to a VPC-CIDR `ipBlock` in `9bb9ef2`.
+- **What You Learned:** The strongest bug reports share a shape: the *root cause* is always one level deeper than the symptom (SDK constructor vs API error handlers; passlib's import-time self-test vs "login broken"; NetworkPolicy selector semantics vs "policy looks right"). And each of the four was invisible to the layer nominally responsible for it — unit tests can't see unset prod config, schema validation can't see nonexistent probe paths, and `{}` is schema-valid — which is the concrete argument for the multi-layer strategy the test plan documents.
