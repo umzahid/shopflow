@@ -573,10 +573,14 @@ Target: **30+ entries** covering all 6 domains for full marks (45–50 pts).
 ### Entry 32
 - **Task Reference:** Domain 6 – Task 37 (OWASP ZAP findings analysis)
 - **Tool Used:** Claude
-- **Prompt (verbatim):**
-- **Output Quality (1–5):**
+- **Prompt (verbatim):** "complete domain 6 and let me know what is left"
+- **Output Quality (1–5):** _(Umair to rate)_
 - **What You Changed:**
-- **What You Learned:**
+  - `security/zap-scan.sh` — Dockerized ZAP runner (`ghcr.io/zaproxy/zaproxy:stable`, `--network host`, no host install — same pattern as e2e/perf): `api` target drives `zap-api-scan.py` off the **OpenAPI spec** (imports all 36 routes, not just what a spider finds), `frontend` target runs `zap-baseline.py`. HTML+JSON reports → gitignored `security/reports/`.
+  - `docs/zap-findings.md` — triaged both scans: **API 0 FAIL / 1 WARN / 118 PASS; frontend 0 FAIL / 10 WARN / 57 PASS — no High/Critical.** Every WARN dispositioned into fixed / real-deferred / accepted / false-positive with rationale (not an alert dump). False positives called out honestly (minifier `eval` patterns, cache-bust `?v=` "timestamp", minified-bundle "suspicious comments").
+  - `app/main.py` — **applied the one API finding**: added `Cross-Origin-Resource-Policy: same-origin` to the security-headers middleware (verified live on `/health`). Takes the API scan to 0 WARN.
+  - Deferred (documented, not silenced): the frontend HTML sends no CSP/X-Frame-Options/Permissions-Policy and leaks `X-Powered-By` — real gaps needing a `next.config.js` `headers()` + nonce-based CSP pass; a `'unsafe-inline'` CSP would pass the scanner while protecting little, so it's tracked as future work rather than a fake fix.
+- **What You Learned:** (1) **The same single-IP rate limit that shaped k6 corrupts ZAP too** — the first scans throttled to 429s and had to be rerun under the `perf/docker-compose.perf.yml` overlay; a scanner behind a rate limiter measures the limiter. (2) ZAP baseline/api scans are **passive + spider only** — the injection-class PASS results (SQLi/XSS/traversal) mean "no passive evidence," not "actively tested"; honest reporting says so and lists active + authenticated scanning as future work rather than implying full coverage. (3) The high-signal move on a scanner dump is triage, not remediation volume: 11 findings, exactly one warranted a code change; the value is the analysis separating that one from the 10 dev-environment-expected / framework-artifact / accepted items.
 
 ### Entry 33
 - **Task Reference:** Domain 6 – Task 38 (Test Plan document)

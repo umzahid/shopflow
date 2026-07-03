@@ -54,6 +54,9 @@ async def security_headers(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # API responses are consumed by our own origin's fetch() only; same-origin
+    # CORP blocks other sites from embedding them as no-cors resources.
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
     if "server" in response.headers:
         del response.headers["server"]
     return response
