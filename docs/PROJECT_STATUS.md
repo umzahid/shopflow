@@ -1,7 +1,7 @@
 # ShopFlow — Project Status Report
 
-**Date:** 2026-07-02 · **Branch:** `week-3-task` at `68a878a` (49 commits ahead of origin, **unpushed**)
-**Assignment:** 8-week GenAI upskilling · **Graded artifact:** `PROMPT_LOG.md` — **30 / 36 entries filled**
+**Date:** 2026-07-03 · **Branch:** `week-3-task` at `62dc453` (60 commits ahead of origin, **unpushed**)
+**Assignment:** 8-week GenAI upskilling · **Graded artifact:** `PROMPT_LOG.md` — **36 / 36 entries filled**
 
 ---
 
@@ -14,12 +14,11 @@
 | 3 — DevOps & CI/CD | E13–E17 | ✅ **Complete** |
 | 4 — Cloud & Infrastructure | E18–E22 | ✅ **Complete** (2026-07-02) |
 | 5 — ML / AI Features | E23–E28 | ✅ **Complete** |
-| 6 — Quality Engineering | E29–E34 | ⬜ **Remaining** — the only open domain |
+| 6 — Quality Engineering | E29–E34 | ✅ **Complete** (2026-07-03) |
 
-**Overall: 5 of 6 domains done (~85–90%).** The 6 unfilled PROMPT_LOG entries
-are exactly the Domain-6 stubs — no hidden logging debt elsewhere (an earlier
-"7 unlogged entries" concern was a counting-script false alarm; those entries
-were filled all along).
+**Overall: all 6 domains done — every PROMPT_LOG entry filled (36/36).**
+The only remaining items are Umair's (verbatim-prompt confirmation + quality
+ratings on a handful of entries) and a `git push`.
 
 ---
 
@@ -82,35 +81,37 @@ HTTP-only ALB).
 
 ---
 
+### Domain 6 — Quality Engineering (completed 2026-07-03)
+| Entry | Deliverable | Verification |
+|---|---|---|
+| E29 | Coupon-service tests closing the last coverage gap | suite **205 tests, 82% cov**, flake8 clean |
+| E30 | `e2e/` Playwright suite (page objects from the real DOM) + `find-locators` skill + project `.mcp.json` | **22/22 passing ≈18.5s** |
+| E31 | `perf/` k6 smoke + load scenarios + Dockerized runner + rate-limit overlay | smoke 102/102 checks; load **6,092 reqs, 0 failures, ~21 rps**, all p95 thresholds met |
+| E32 | `security/zap-scan.sh` + `docs/zap-findings.md` (triaged) + applied CORP header | API **0 FAIL/1 WARN/118 PASS**, frontend **0 FAIL/10 WARN/57 PASS** — no High/Critical |
+| E33 | `docs/test-plan.md` — synthesizes all six test layers, scope boundaries, risk table | — |
+| E34 | `docs/bug-reports.md` — 4 real fixed defects, one per discovery method | commits cited (`dcebff0`, bcrypt pin, `9bb9ef2`) |
+
+---
+
 ## Remaining work
 
-### Domain 6 — Quality Engineering (the only open domain)
-
-| Entry | Task | Reality check |
-|---|---|---|
-| **E29** | Backend unit test suite | **Suite already exists** (196 tests, 80% cov) — only the log entry needs writing. Quickest win. |
-| **E30** | Playwright E2E scripts | Not built. Stack runs locally; natural next build item. |
-| **E31** | k6 performance test scripts | Not built. Target the API against compose. |
-| **E32** | OWASP ZAP findings analysis | Not built. ZAP baseline scan vs `localhost:8000/3000` + write-up. |
-| **E33** | Test Plan document | Not built. Should synthesize E29–E32. |
-| **E34** | Bug report writing | Not built. Rich material exists — this session alone produced 7+ real, fixed bugs to write up. |
-
-Suggested order: **E29 (log only) → E30 → E31 → E32 → E34 → E33** (plan last,
-so it documents what actually exists).
-
 ### Items needing Umair (5 minutes)
-- **7 entries carry placeholders**: E18–E22, E27, E28 — confirm the
-  _verbatim prompt_ wording and add your **Output Quality (1–5)** rating.
-- **Push the branch** — 49 commits ahead of `origin/week-3-task`, all local.
-  (One `git push` — everything is committed and the tree is clean.)
+- **Verbatim-prompt + quality ratings** still marked _(Umair to rate)_ on the
+  entries filled by Claude: E18–E22, E27, E28, and the Domain-6 set E31–E34.
+- **Push the branch** — **60 commits** ahead of `origin/week-3-task`, all local,
+  tree clean. One `git push`.
 
 ### Optional / stretch (not required by the log)
+- **Frontend security-header pass** (from E32): `next.config.js` `headers()` +
+  nonce-based CSP, strip `X-Powered-By` — the deferred real ZAP findings.
+- **Active + authenticated ZAP scan** (`zap-full-scan.py` + session token) to
+  cover the injection classes and merchant/admin surface the passive scan can't.
+- Promote E2E + k6 smoke + ZAP baseline to scheduled CI jobs.
 - Week 5 Track B (S3 image uploads) — deferred by choice.
 - E19 action list top items if the infra is ever applied: EKS access entries,
   per-AZ NAT, `public_access_cidrs` restriction.
 - CI jobs for terraform fmt/validate + kubeconform (cheap; commands exist).
 - Re-run E22 with a real infracost API key and commit the JSON.
-- GitHub Actions polish pass.
 
 ---
 
@@ -118,11 +119,13 @@ so it documents what actually exists).
 
 | What | Where |
 |---|---|
-| Graded log | `PROMPT_LOG.md` (30/36 filled) |
+| Graded log | `PROMPT_LOG.md` (36/36 filled) |
 | Specs & plans (superpowers pipeline) | `docs/superpowers/{specs,plans}/` |
 | WA review / cost / free-tier docs | `docs/well-architected-review.md`, `docs/cost-optimization.md`, `docs/aws-free-tier.md` |
+| QE docs | `docs/test-plan.md`, `docs/bug-reports.md`, `docs/zap-findings.md` |
+| Test suites | `backend/tests/` (205) · `e2e/` (22) · `perf/` (k6) · `security/zap-scan.sh` |
 | IaC | `infrastructure/` (validate-only) · `k8s/` (kubeconform-validated) |
 | Eval harness | `backend/app/eval/` + `app/scripts/eval_{search,fraud}.py` |
 | Verification commands | CLAUDE.md + each doc's header |
 
-*Report generated 2026-07-02 against commit `68a878a`. Regenerate after Domain 6 lands.*
+*Report generated 2026-07-03 against commit `62dc453`. All six domains complete.*
