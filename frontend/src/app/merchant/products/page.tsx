@@ -1,10 +1,11 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, Pencil, Plus, Sparkles, X } from "lucide-react";
+import { Check, LineChart as LineChartIcon, Pencil, Plus, Sparkles, X } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/Button";
+import { ForecastChart } from "@/components/ui/Charts";
 import { Drawer } from "@/components/ui/Drawer";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -15,6 +16,7 @@ import {
   merchantKeys,
   useGenerateDescription,
   useMerchantProducts,
+  useProductForecast,
   useUpdateProduct,
 } from "@/lib/merchant";
 import type { Product, ProductStatus } from "@/types/api";
@@ -35,6 +37,7 @@ const STATUS_BADGE: Record<ProductStatus, string> = {
 export default function ProductManagerPage() {
   const [statusFilter, setStatusFilter] = useState<"" | ProductStatus>("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [forecast, setForecast] = useState<Product | null>(null);
   const query = useMerchantProducts(statusFilter || undefined);
   const products = query.data?.items ?? [];
 
@@ -101,7 +104,7 @@ export default function ProductManagerPage() {
             </thead>
             <tbody className="divide-y divide-border">
               {products.map((p) => (
-                <ProductRow key={p.id} product={p} />
+                <ProductRow key={p.id} product={p} onForecast={() => setForecast(p)} />
               ))}
             </tbody>
           </table>
@@ -115,11 +118,40 @@ export default function ProductManagerPage() {
       >
         <CreateProductForm onDone={() => setCreateOpen(false)} />
       </Drawer>
+
+      <Drawer
+        open={forecast !== null}
+        onClose={() => setForecast(null)}
+        title={forecast ? `Demand forecast — ${forecast.title}` : "Forecast"}
+      >
+        {forecast && <ForecastView productId={forecast.id} />}
+      </Drawer>
     </div>
   );
 }
 
-function ProductRow({ product }: { product: Product }) {
+function ForecastView({ productId }: { productId: string }) {
+  const { data, isLoading, isError, error } = useProductForecast(productId, 30);
+  if (isLoading) return <Skeleton variant="blank" className="h-52" />;
+  if (isError) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        {error instanceof ApiError ? error.problem.detail : "Couldn't load forecast."}
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-sm text-muted-foreground">
+        Projected daily demand for the next {data?.horizon_days ?? 30} days, with a
+        confidence band.
+      </p>
+      <ForecastChart points={data?.points ?? []} />
+    </div>
+  );
+}
+
+function ProductRow({ product, onForecast }: { product: Product; onForecast: () => void }) {
   const { toast } = useToast();
   const update = useUpdateProduct();
   const [editing, setEditing] = useState(false);
@@ -235,6 +267,14 @@ function ProductRow({ product }: { product: Product }) {
                 onClick={() => setEditing(true)}
               >
                 Edit
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                leftIcon={<LineChartIcon className="h-4 w-4" aria-hidden="true" />}
+                onClick={onForecast}
+              >
+                Forecast
               </Button>
               {product.status === "active" ? (
                 <Button

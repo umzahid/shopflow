@@ -8,6 +8,7 @@ import {
 
 import { api } from "@/lib/api";
 import type {
+  CopilotResponse,
   DescriptionRequest,
   DescriptionResponse,
   MerchantDashboard,
@@ -16,6 +17,7 @@ import type {
   PaginatedOrders,
   PaginatedProducts,
   Product,
+  ProductForecast,
   ProductStatus,
   RestockAlertsResponse,
   RevenueSummary,
@@ -135,5 +137,32 @@ export function useGenerateDescription(): UseMutationResult<
         method: "POST",
         body,
       }),
+  });
+}
+
+/** POST /merchant/copilot — single-turn NL analytics. */
+export function useCopilot(): UseMutationResult<CopilotResponse, Error, string> {
+  return useMutation({
+    mutationFn: (question) =>
+      api<CopilotResponse>("/merchant/copilot", {
+        method: "POST",
+        body: { question },
+      }),
+  });
+}
+
+/** GET /merchant/products/:id/forecast — Prophet demand forecast. */
+export function useProductForecast(
+  productId: string | null,
+  horizon = 30,
+): UseQueryResult<ProductForecast, Error> {
+  return useQuery({
+    queryKey: [...merchantKeys.all, "forecast", productId, horizon],
+    queryFn: () =>
+      api<ProductForecast>(
+        `/merchant/products/${productId}/forecast?horizon=${horizon}`,
+      ),
+    enabled: !!productId,
+    staleTime: 60_000,
   });
 }

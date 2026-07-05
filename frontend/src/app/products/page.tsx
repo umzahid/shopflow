@@ -461,16 +461,47 @@ function SearchResultsGrid({
     return <EmptyResults message={`No products matched "${q}". Try another search.`} />;
   }
 
+  // "Did you mean?" — when results are sparse, the hybrid search still returns
+  // its closest semantic neighbours, so surface the strongest one as a nudge.
+  const sparse = items.length <= 2;
+  const topAlt = items[0];
+
+  function confidence(score: number): { label: string; tone: string } {
+    if (score >= 0.7) return { label: "Strong match", tone: "bg-primary/10 text-primary" };
+    if (score >= 0.4) return { label: "Good match", tone: "bg-secondary/10 text-secondary" };
+    return { label: "Related", tone: "bg-muted text-muted-foreground" };
+  }
+
   return (
     <>
       <p className="text-sm text-muted-foreground" aria-live="polite">
         {items.length} {items.length === 1 ? "match" : "matches"} found.
         Showing the top relevance hits.
       </p>
+      {sparse && topAlt && (
+        <p className="rounded-lg border border-border bg-muted/40 px-4 py-2 text-sm text-foreground">
+          Few exact matches — did you mean{" "}
+          <Link href={`/products/${topAlt.id}`} className="font-semibold text-secondary hover:underline">
+            {topAlt.title}
+          </Link>
+          ? Showing the closest matches by meaning.
+        </p>
+      )}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {items.map((p) => (
-          <ProductCard key={p.id} product={p} onAddToCart={onAddToCart} />
-        ))}
+        {items.map((p) => {
+          const c = confidence(p.relevance_score);
+          return (
+            <div key={p.id} className="relative">
+              <span
+                className={`absolute left-2 top-2 z-10 rounded-full px-2 py-0.5 text-xs font-semibold ${c.tone}`}
+                title={`Relevance ${p.relevance_score.toFixed(2)}`}
+              >
+                {c.label}
+              </span>
+              <ProductCard product={p} onAddToCart={onAddToCart} />
+            </div>
+          );
+        })}
       </div>
     </>
   );

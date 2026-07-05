@@ -51,10 +51,11 @@ def _cursor_for(product: Product) -> str:
 # doesn't route "search" as a product id.
 # ---------------------------------------------------------------------------
 
-# Hybrid ranking weights. Tuned so semantic matches drive discovery of
-# meaning-similar items while lexical matches keep exact-token hits visible.
-_LEX_WEIGHT = 0.4
-_SEM_WEIGHT = 0.6
+# Hybrid ranking weights per the PRD spec: final = 0.7·semantic + 0.3·keyword.
+# Semantic drives discovery of meaning-similar items; lexical keeps exact-token
+# hits visible.
+_LEX_WEIGHT = 0.3
+_SEM_WEIGHT = 0.7
 # Below this cosine similarity a product is considered unrelated for hybrid
 # purposes and won't show up on semantic strength alone.
 _SEM_THRESHOLD = 0.3

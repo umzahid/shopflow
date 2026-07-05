@@ -44,6 +44,10 @@ def _generate_dataset(
     prior_cancellation_count = rng.binomial(n=prior_order_count + 1, p=0.05)
     discount_ratio = np.clip(rng.beta(a=1.2, b=8.0, size=n), 0.0, 0.9)
     is_off_hours = rng.binomial(n=1, p=0.2, size=n).astype(float)
+    # Most orders are the only one from their IP in 24h; a heavy tail models
+    # card-testing bursts.
+    orders_from_ip_24h = rng.poisson(lam=0.4, size=n).astype(float)
+    billing_shipping_mismatch = rng.binomial(n=1, p=0.15, size=n).astype(float)
 
     new_account = np.clip(1.0 - account_age_hours / 168.0, 0.0, 1.0)
     no_history = (prior_order_count == 0).astype(float)
@@ -57,6 +61,8 @@ def _generate_dataset(
         + 1.6 * discount_ratio
         + 0.4 * is_off_hours
         + 0.5 * np.minimum(max_unit_price / 500.0, 1.0)
+        + 0.7 * np.minimum(orders_from_ip_24h / 5.0, 1.0)
+        + 0.8 * billing_shipping_mismatch
     )
     risk += rng.normal(0.0, 0.4, size=n)  # irreducible noise
 
@@ -77,6 +83,8 @@ def _generate_dataset(
             prior_cancellation_count,
             discount_ratio,
             is_off_hours,
+            orders_from_ip_24h,
+            billing_shipping_mismatch,
         ]
     )
     assert features.shape[1] == len(FEATURE_NAMES), "feature column count drifted from FEATURE_NAMES"

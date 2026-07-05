@@ -11,6 +11,7 @@ import type {
   PaginatedProducts,
   PaginatedReviews,
   Product,
+  ProductSearchResult,
 } from "@/types/api";
 
 export interface ProductListFilters {
@@ -93,11 +94,11 @@ export function useInfiniteProducts(
 export function useProductSearch(
   q: string,
   limit = 50,
-): UseQueryResult<Product[], Error> {
+): UseQueryResult<ProductSearchResult[], Error> {
   return useQuery({
     queryKey: productKeys.search(q, limit),
     queryFn: () =>
-      api<Product[]>(
+      api<ProductSearchResult[]>(
         `/products/search?q=${encodeURIComponent(q)}&limit=${limit}`,
       ),
     enabled: q.trim().length > 0,

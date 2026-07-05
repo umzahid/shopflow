@@ -30,6 +30,10 @@ export interface PaginatedProducts {
   next_cursor: string | null;
 }
 
+export interface ProductSearchResult extends Product {
+  relevance_score: number;
+}
+
 export interface CartItem {
   product_id: string;
   title: string;
@@ -183,6 +187,30 @@ export interface DescriptionRequest {
 
 export interface DescriptionResponse {
   variants: string[];
+}
+
+export interface CopilotToolCall {
+  tool: string;
+  input: Record<string, unknown>;
+  result: unknown;
+}
+
+export interface CopilotResponse {
+  answer: string;
+  tool_calls: CopilotToolCall[];
+}
+
+export interface ForecastPoint {
+  ds: string;
+  yhat: number;
+  yhat_lower: number;
+  yhat_upper: number;
+}
+
+export interface ProductForecast {
+  product_id: string;
+  horizon_days: number;
+  points: ForecastPoint[];
 }
 
 export interface ProblemDetail {

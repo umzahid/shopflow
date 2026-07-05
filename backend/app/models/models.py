@@ -112,6 +112,8 @@ class Order(TimestampMixin, Base):
     status: Mapped[OrderStatus] = mapped_column(Enum(OrderStatus), nullable=False, default=OrderStatus.pending)
     total_amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     shipping_address: Mapped[dict] = mapped_column(JSON, nullable=False)
+    billing_address: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
     coupon_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), ForeignKey("coupons.id", ondelete="SET NULL"), nullable=True)
     discount_amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False, default=0)
     fraud_score: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
@@ -124,6 +126,7 @@ class Order(TimestampMixin, Base):
     __table_args__ = (
         Index("ix_orders_customer_id", "customer_id"),
         Index("ix_orders_status", "status"),
+        Index("ix_orders_ip_address", "ip_address"),
     )
 
 

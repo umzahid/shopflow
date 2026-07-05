@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 
 import { Header } from "@/components/Header";
+import { MerchantCopilot } from "@/components/MerchantCopilot";
 import { useAuth } from "@/store/auth";
 
 const NAV = [
@@ -80,6 +81,7 @@ export default function MerchantLayout({ children }: { children: ReactNode }) {
         </nav>
         <main id="main">{children}</main>
       </div>
+      <MerchantCopilot />
     </>
   );
 }

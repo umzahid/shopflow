@@ -64,6 +64,15 @@ def _cursor_for(order: Order) -> str:
 # POST /orders/checkout — the transaction that actually matters
 # ---------------------------------------------------------------------------
 
+def _client_ip(request: Request) -> str | None:
+    """Best-effort client IP. Behind the ALB/CloudFront the real client is the
+    first hop in X-Forwarded-For; fall back to the socket peer."""
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else None
+
+
 @router.post("/checkout", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
 async def checkout(
     body: CheckoutRequest,
@@ -119,12 +128,18 @@ async def checkout(
     # features exclude this in-flight order. A flagged order lands in
     # pending_review rather than pending, so it never auto-progresses to fulfilment.
     line_items = [(products_by_id[pid].price, line["qty"]) for pid, line in cart_raw.items()]
+    shipping_dict = body.shipping_address.model_dump()
+    billing_dict = body.billing_address.model_dump() if body.billing_address else None
+    client_ip = _client_ip(request)
     _, fraud = await fraud_svc.assess_order(
         db,
         customer=current_user,
         order_total=total,
         discount_amount=discount,
         line_items=line_items,
+        ip_address=client_ip,
+        shipping_address=shipping_dict,
+        billing_address=billing_dict,
     )
     order_status = OrderStatus.pending_review if fraud.is_flagged else OrderStatus.pending
 
@@ -134,7 +149,9 @@ async def checkout(
         status=order_status,
         total_amount=total,
         discount_amount=discount,
-        shipping_address=body.shipping_address.model_dump(),
+        shipping_address=shipping_dict,
+        billing_address=billing_dict,
+        ip_address=client_ip,
         coupon_id=coupon_id,
         fraud_score=fraud.score,
         fraud_reasons=fraud.reasons,

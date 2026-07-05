@@ -17,6 +17,8 @@ class ShippingAddress(BaseModel):
 
 class CheckoutRequest(BaseModel):
     shipping_address: ShippingAddress
+    # Optional — a billing address that differs from shipping is a fraud signal.
+    billing_address: ShippingAddress | None = None
     coupon_code: str | None = Field(default=None, max_length=50)
 
 

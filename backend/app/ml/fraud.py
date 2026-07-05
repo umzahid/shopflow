@@ -42,6 +42,8 @@ FEATURE_NAMES = [
     "prior_cancellation_count",
     "discount_ratio",
     "is_off_hours",
+    "orders_from_ip_24h",
+    "billing_shipping_mismatch",
 ]
 
 # How each feature reads when it drives a score up.
@@ -56,6 +58,8 @@ _REASON_TEMPLATES = {
     "prior_cancellation_count": "History of cancelled orders",
     "discount_ratio": "Large discount applied",
     "is_off_hours": "Order placed during off-hours",
+    "orders_from_ip_24h": "Many recent orders from the same IP address",
+    "billing_shipping_mismatch": "Billing and shipping addresses differ",
 }
 
 # Trained booster location. The training script writes here; override in prod via
@@ -82,6 +86,8 @@ class FraudFeatures:
     prior_cancellation_count: int
     discount_ratio: float
     is_off_hours: int
+    orders_from_ip_24h: int = 0
+    billing_shipping_mismatch: int = 0
 
     def to_vector(self) -> list[float]:
         """Ordered numeric vector for the model — order matches FEATURE_NAMES."""
@@ -127,6 +133,8 @@ def _fake_score(f: FraudFeatures) -> FraudPrediction:
         "prior_cancellation_count": 0.7 * min(f.prior_cancellation_count / 3.0, 1.0),
         "discount_ratio": 1.2 * min(f.discount_ratio, 1.0),
         "is_off_hours": 0.4 * f.is_off_hours,
+        "orders_from_ip_24h": 0.5 * min(f.orders_from_ip_24h / 5.0, 1.0),
+        "billing_shipping_mismatch": 0.6 * f.billing_shipping_mismatch,
     }
     raw = sum(contributions.values())
     # Logistic centred so ~raw=2.0 sits at the 0.5 mark.
@@ -177,6 +185,17 @@ def set_scorer(fn: ScorerFn | None) -> None:
     _scorer_override = fn
 
 
+@lru_cache(maxsize=1)
+def _lightgbm_available() -> bool:
+    try:
+        import lightgbm  # noqa: F401
+        import numpy  # noqa: F401 - _model_score needs it too
+
+        return True
+    except ImportError:
+        return False
+
+
 def _current_scorer() -> ScorerFn:
     if _scorer_override is not None:
         return _scorer_override
@@ -188,6 +207,11 @@ def _current_scorer() -> ScorerFn:
             "Run `python -m app.scripts.train_fraud_model` to train one.",
             MODEL_PATH,
         )
+        return _fake_score
+    if not _lightgbm_available():
+        # Artifact present but the ML runtime isn't installed — never hard-fail
+        # checkout; degrade to the heuristic scorer.
+        logger.warning("lightgbm unavailable — falling back to heuristic fraud scorer.")
         return _fake_score
     return _model_score
 

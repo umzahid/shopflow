@@ -112,6 +112,69 @@ export function DonutChart({
   );
 }
 
+export interface ForecastDatum {
+  ds: string;
+  yhat: number;
+  yhat_lower: number;
+  yhat_upper: number;
+}
+
+/** Line chart with a shaded confidence band — for demand forecasts. */
+export function ForecastChart({
+  points,
+  height = 200,
+  color = "#1d4ed8",
+}: {
+  points: ForecastDatum[];
+  height?: number;
+  color?: string;
+}) {
+  if (points.length === 0) {
+    return (
+      <p className="py-8 text-center text-sm text-muted-foreground">
+        Not enough sales history to forecast yet (needs ~14 days).
+      </p>
+    );
+  }
+
+  const W = 600;
+  const H = height;
+  const pad = 8;
+  const lo = Math.min(...points.map((p) => p.yhat_lower));
+  const hi = Math.max(...points.map((p) => p.yhat_upper), lo + 1);
+  const x = (i: number) => pad + (i / Math.max(1, points.length - 1)) * (W - 2 * pad);
+  const y = (v: number) => H - pad - ((v - lo) / (hi - lo)) * (H - 2 * pad);
+
+  const line = points.map((p, i) => `${x(i)},${y(p.yhat)}`).join(" ");
+  const band =
+    points.map((p, i) => `${x(i)},${y(p.yhat_upper)}`).join(" ") +
+    " " +
+    points
+      .map((p, i) => `${x(points.length - 1 - i)},${y(p.yhat_lower)}`)
+      .reverse()
+      .join(" ");
+
+  return (
+    <div>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        width="100%"
+        height={H}
+        role="img"
+        aria-label={`Demand forecast over ${points.length} days`}
+        preserveAspectRatio="none"
+      >
+        <polygon points={band} fill={color} opacity={0.15} />
+        <polyline points={line} fill="none" stroke={color} strokeWidth={2} />
+      </svg>
+      <div className="mt-1.5 flex justify-between text-[10px] text-muted-foreground">
+        <span>{points[0]?.ds}</span>
+        <span>{points[points.length - 1]?.ds}</span>
+      </div>
+    </div>
+  );
+}
+
 export interface BarDatum {
   label: string;
   value: number;
