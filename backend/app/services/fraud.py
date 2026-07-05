@@ -7,6 +7,7 @@ runs, so the prior-history counts naturally exclude it.
 """
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
@@ -137,4 +138,7 @@ async def assess_order(
         shipping_address=shipping_address,
         billing_address=billing_address,
     )
-    return features, score_order(features)
+    # Model inference is CPU-bound (LightGBM); keep it off the event loop so a
+    # burst of checkouts doesn't serialize on scoring.
+    prediction = await asyncio.to_thread(score_order, features)
+    return features, prediction

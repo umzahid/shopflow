@@ -1,3 +1,4 @@
+import asyncio
 from decimal import Decimal
 from typing import Literal
 from uuid import UUID
@@ -25,7 +26,7 @@ from app.schemas.product import (
     ProductSummaryResponse,
     ProductUpdate,
 )
-from app.services.embedding import embed_product_text, encode as encode_query
+from app.services.embedding import embed_product_text, encode_query
 from app.services.summary import summarize_product
 
 router = APIRouter(prefix="/products", tags=["products"])
@@ -88,7 +89,10 @@ async def _lexical_search(db: AsyncSession, q: str, limit: int):
 
 
 async def _semantic_search(db: AsyncSession, q: str, limit: int):
-    qvec = encode_query(q)
+    # Offload the CPU-bound encode to a worker thread so it never blocks the
+    # async event loop (a cache miss would otherwise stall every concurrent
+    # request on a single worker). Cache hits return near-instantly.
+    qvec = await asyncio.to_thread(encode_query, q)
     distance = Product.embedding.cosine_distance(qvec)
     similarity = (1 - distance).label("score")
     stmt = (
@@ -105,7 +109,7 @@ async def _hybrid_search(db: AsyncSession, q: str, limit: int):
     tsq = func.plainto_tsquery("english", q)
     lex_score = func.ts_rank(tsv, tsq)
 
-    qvec = encode_query(q)
+    qvec = await asyncio.to_thread(encode_query, q)
     distance = Product.embedding.cosine_distance(qvec)
     sem_score = 1 - distance
 

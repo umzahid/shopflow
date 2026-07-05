@@ -10,10 +10,11 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     DEBUG: bool = False
 
-    # Database
+    # Database. Pool sized for concurrent load (Postgres default max_connections
+    # is 100; 20 + 40 overflow = 60 leaves headroom for migrations/admin).
     DATABASE_URL: str
-    DATABASE_POOL_SIZE: int = 10
-    DATABASE_MAX_OVERFLOW: int = 20
+    DATABASE_POOL_SIZE: int = 20
+    DATABASE_MAX_OVERFLOW: int = 40
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
