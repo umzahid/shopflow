@@ -7,6 +7,27 @@
 
 ---
 
+## ✅ Update — 2026-07-06 (gap-closing sprint)
+
+Most gaps below have been **closed** since this analysis was written. Snapshot:
+
+| Domain | Status now | Notes |
+|---|---|---|
+| 1 — Backend | ✅ **closed** | webhooks (HMAC), order tracking, admin users/orders, authenticated rate-limit tier — all shipped + tested |
+| 2 — Frontend | ✅ **closed** | merchant admin panel; full 10-component library + Storybook + 22 tests; customer account (orders/profile/addresses/reviews); order-tracking timeline; AI product summary; a11y fixes |
+| 3 — DevOps | ✅ **closed** | structured JSON logging, `db_query_duration_seconds` + `active_orders_total` + Grafana panels, CI grew to 12 jobs (Semgrep/detect-secrets/black/prettier/markdownlint + build-push + staging/prod deploy). Frontend image 199MB (<200MB); backend 2.4GB documented |
+| 4 — Cloud | ✅ **closed** | database/storage/monitoring modules filled (RDS Multi-AZ, ElastiCache, Secrets Manager, S3 IA→Glacier lifecycle, CloudWatch + billing alarm, VPC flow logs), Owner/CostCenter tags, staging/prod tfvars — `terraform validate` clean offline |
+| 5 — ML | ✅ **closed** | 0.7/0.3 hybrid weights; fraud model trained + **committed**, hits precision 0.855/recall 0.724 on holdout; IP + billing fraud features; Copilot chat, forecast chart, search confidence UIs |
+| 6 — QA | 🟡 **partial** | 22 new component tests added; active ZAP scan running; full accessibility audit across pages still outstanding |
+| README/Demo | 🟡 **partial** | Mermaid architecture diagram added; **5-min demo video is the owner's to record** |
+
+**Remaining:** the Domain-6 accessibility audit, and the demo video (human).
+Terraform residuals by design: ALB is created by the AWS LB Controller from the
+k8s Ingress; Route53/infracost need a real domain / API key; no `apply`
+(free-tier). Detail below is the original (pre-sprint) analysis, kept for record.
+
+---
+
 ## Executive summary
 
 **The distinction that matters:** the project tracks itself as "all 6 domains complete" because **all 36 PROMPT_LOG entries are filled**. The PRD, however, grades **working deliverables** — and against that bar several deliverables behind those entries are partial or missing. The prompt log is done; the product is not.
