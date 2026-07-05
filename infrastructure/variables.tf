@@ -87,3 +87,48 @@ variable "cdn_log_bucket_domain_name" {
   type        = string
   default     = null
 }
+
+# ── Tagging (Well-Architected cost allocation) ──────────────────────────────
+variable "owner" {
+  description = "Owner tag applied to every resource."
+  type        = string
+  default     = "platform-team"
+}
+
+variable "cost_center" {
+  description = "CostCenter tag applied to every resource."
+  type        = string
+  default     = "engineering"
+}
+
+# ── Database / cache ────────────────────────────────────────────────────────
+variable "db_instance_class" {
+  description = "RDS instance class."
+  type        = string
+  default     = "db.t3.medium"
+}
+
+variable "db_multi_az" {
+  description = "Multi-AZ RDS. Off for dev/staging to save cost."
+  type        = bool
+  default     = true
+}
+
+variable "redis_node_type" {
+  description = "ElastiCache node type."
+  type        = string
+  default     = "cache.t3.micro"
+}
+
+# ── Monitoring ──────────────────────────────────────────────────────────────
+variable "billing_threshold_usd" {
+  description = "Billing alarm threshold (USD)."
+  type        = number
+  default     = 50
+}
+
+variable "alarm_email" {
+  description = "Optional email for billing/ops alerts."
+  type        = string
+  default     = ""
+}

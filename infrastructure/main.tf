@@ -6,6 +6,8 @@ provider "aws" {
       Project     = var.project
       Environment = var.environment
       ManagedBy   = "terraform"
+      Owner       = var.owner
+      CostCenter  = var.cost_center
     }
   }
 }
@@ -45,4 +47,30 @@ module "cdn" {
   acm_certificate_arn    = var.cdn_acm_certificate_arn
   web_acl_id             = var.cdn_web_acl_id
   log_bucket_domain_name = var.cdn_log_bucket_domain_name
+}
+
+module "storage" {
+  source = "./modules/storage"
+
+  name = local.name
+}
+
+module "database" {
+  source = "./modules/database"
+
+  name               = local.name
+  vpc_id             = module.networking.vpc_id
+  vpc_cidr_block     = module.networking.vpc_cidr_block
+  private_subnet_ids = module.networking.private_subnet_ids
+  db_instance_class  = var.db_instance_class
+  db_multi_az        = var.db_multi_az
+  redis_node_type    = var.redis_node_type
+}
+
+module "monitoring" {
+  source = "./modules/monitoring"
+
+  name                  = local.name
+  billing_threshold_usd = var.billing_threshold_usd
+  alarm_email           = var.alarm_email
 }

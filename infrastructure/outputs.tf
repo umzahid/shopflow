@@ -42,3 +42,23 @@ output "cdn_origin_bucket_name" {
   description = "CDN static-assets origin bucket name."
   value       = module.cdn.origin_bucket_name
 }
+
+output "rds_endpoint" {
+  description = "RDS Postgres endpoint."
+  value       = module.database.rds_endpoint
+}
+
+output "redis_endpoint" {
+  description = "ElastiCache Redis endpoint."
+  value       = module.database.redis_endpoint
+}
+
+output "db_secret_arn" {
+  description = "Secrets Manager ARN with DB credentials."
+  value       = module.database.db_secret_arn
+}
+
+output "product_images_bucket" {
+  description = "S3 product-images bucket name."
+  value       = module.storage.bucket_id
+}

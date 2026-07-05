@@ -23,3 +23,14 @@ public_access_cidrs = ["0.0.0.0/0"]
 cdn_price_class = "PriceClass_100"
 # cdn_aliases             = ["cdn.example.com"]
 # cdn_acm_certificate_arn = "arn:aws:acm:us-east-1:<account-id>:certificate/<id>"
+
+# Database / cache
+db_instance_class = "db.t3.medium"
+db_multi_az       = true
+redis_node_type   = "cache.t3.micro"
+
+# Monitoring + tags
+billing_threshold_usd = 50
+# alarm_email         = "ops@example.com"
+owner       = "platform-team"
+cost_center = "engineering"
