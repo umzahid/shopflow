@@ -1,6 +1,6 @@
 "use client";
 
-import { LogOut, User as UserIcon } from "lucide-react";
+import { LayoutDashboard, LogOut, User as UserIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -40,6 +40,15 @@ export function AuthMenu() {
 
   return (
     <div className="hidden sm:flex items-center gap-1">
+      {user.role === "merchant" && (
+        <Link
+          href="/merchant"
+          className="inline-flex h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        >
+          <LayoutDashboard className="h-4 w-4 text-secondary" aria-hidden="true" strokeWidth={2} />
+          Dashboard
+        </Link>
+      )}
       <span
         className="inline-flex h-11 items-center gap-2 rounded-lg bg-muted/60 px-3 text-sm font-semibold text-foreground"
         title={user.email}

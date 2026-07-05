@@ -10,17 +10,29 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.deps import require_role
+from app.core.pagination import (
+    DEFAULT_PAGE_SIZE,
+    MAX_PAGE_SIZE,
+    apply_cursor,
+    build_page,
+    encode_cursor,
+    resolve_page_size,
+)
 from app.models.models import (
     Order,
     OrderItem,
     OrderStatus,
     Product,
+    ProductStatus,
     User,
     UserRole,
 )
+from app.schemas.order import OrderResponse, PaginatedOrders
+from app.schemas.product import PaginatedProducts, ProductResponse
 from app.schemas.copilot import CopilotRequest, CopilotResponse, ToolCallTrace
 from app.schemas.dashboard import (
     DailyRevenue,
@@ -172,6 +184,78 @@ async def revenue_summary(
 
     series = [DailyRevenue(day=day.date(), revenue=Decimal(rev)) for day, rev in rows]
     return RevenueSummary(start=start, end=end, series=series)
+
+
+@router.get("/products", response_model=PaginatedProducts)
+async def merchant_products(
+    request: Request,
+    cursor: str | None = Query(default=None),
+    page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    status_filter: ProductStatus | None = Query(default=None, alias="status"),
+    current_user: User = Depends(require_role(UserRole.merchant)),
+    db: AsyncSession = Depends(get_db),
+):
+    """The merchant's own products for the product manager.
+
+    Unlike the public `GET /products` (active-only), this returns every
+    status — draft/active/archived — so the merchant can manage the full
+    catalog. Soft-deleted rows are still excluded.
+    """
+    page_size = resolve_page_size(page_size)
+    stmt = select(Product).where(
+        Product.merchant_id == current_user.id,
+        Product.deleted_at.is_(None),
+    )
+    if status_filter is not None:
+        stmt = stmt.where(Product.status == status_filter)
+
+    stmt = apply_cursor(stmt, Product.created_at, Product.id, cursor, page_size)
+    rows = (await db.execute(stmt)).scalars().all()
+    items, next_cursor = build_page(
+        rows, page_size, lambda p: encode_cursor(p.created_at, p.id)
+    )
+    return PaginatedProducts(
+        items=[ProductResponse.model_validate(p) for p in items],
+        next_cursor=next_cursor,
+    )
+
+
+@router.get("/orders", response_model=PaginatedOrders)
+async def merchant_orders(
+    request: Request,
+    cursor: str | None = Query(default=None),
+    page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    status_filter: OrderStatus | None = Query(default=None, alias="status"),
+    current_user: User = Depends(require_role(UserRole.merchant)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Orders containing at least one of this merchant's products, for the
+    order manager. Same scoping as `GET /orders` for a merchant, exposed under
+    the /merchant namespace per the API contract."""
+    page_size = resolve_page_size(page_size)
+    owned_orders = (
+        select(OrderItem.order_id)
+        .join(Product, Product.id == OrderItem.product_id)
+        .where(Product.merchant_id == current_user.id)
+        .subquery()
+    )
+    stmt = (
+        select(Order)
+        .options(selectinload(Order.items))
+        .where(Order.id.in_(select(owned_orders)))
+    )
+    if status_filter is not None:
+        stmt = stmt.where(Order.status == status_filter)
+
+    stmt = apply_cursor(stmt, Order.created_at, Order.id, cursor, page_size)
+    rows = (await db.execute(stmt)).scalars().unique().all()
+    items, next_cursor = build_page(
+        rows, page_size, lambda o: encode_cursor(o.created_at, o.id)
+    )
+    return PaginatedOrders(
+        items=[OrderResponse.model_validate(o) for o in items],
+        next_cursor=next_cursor,
+    )
 
 
 @router.get(

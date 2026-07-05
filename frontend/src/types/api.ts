@@ -114,6 +114,77 @@ export interface PaginatedReviews {
   histogram: RatingHistogram;
 }
 
+export interface PaginatedOrders {
+  items: Order[];
+  next_cursor: string | null;
+}
+
+// --- Merchant dashboard / analytics (mirror app/schemas/dashboard.py) ---
+
+export interface RevenueWindows {
+  last_7d: string;
+  last_30d: string;
+  last_90d: string;
+}
+
+export interface OrderStatusCount {
+  status: OrderStatus;
+  count: number;
+}
+
+export interface TopProduct {
+  product_id: string;
+  title: string;
+  units_sold: number;
+  revenue: string;
+}
+
+export interface MerchantDashboard {
+  revenue: RevenueWindows;
+  orders_by_status: OrderStatusCount[];
+  top_products: TopProduct[];
+}
+
+export interface DailyRevenue {
+  day: string;
+  revenue: string;
+}
+
+export interface RevenueSummary {
+  start: string;
+  end: string;
+  series: DailyRevenue[];
+}
+
+export interface RestockAlert {
+  product_id: string;
+  title: string;
+  current_stock: number;
+  predicted_demand_units: number;
+  shortfall_units: number;
+  days_until_stockout: number | null;
+}
+
+export interface RestockAlertsResponse {
+  lead_time_days: number;
+  alerts: RestockAlert[];
+}
+
+export type DescriptionTone = "professional" | "playful" | "luxury" | "minimal";
+export type DescriptionLength = "short" | "medium" | "long";
+
+export interface DescriptionRequest {
+  title: string;
+  category?: string | null;
+  key_features?: string[];
+  tone?: DescriptionTone;
+  length?: DescriptionLength;
+}
+
+export interface DescriptionResponse {
+  variants: string[];
+}
+
 export interface ProblemDetail {
   type: string;
   title: string;
