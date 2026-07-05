@@ -17,8 +17,14 @@ from app.core.pagination import (
     encode_cursor,
     resolve_page_size,
 )
-from app.models.models import Order, OrderItem, OrderStatus, User, UserRole
-from app.schemas.admin import AdminUserUpdate, PaginatedUsers, AdminUserResponse
+from app.models.models import Coupon, Order, OrderItem, OrderStatus, User, UserRole
+from app.schemas.admin import (
+    AdminUserResponse,
+    AdminUserUpdate,
+    CouponCreate,
+    CouponResponse,
+    PaginatedUsers,
+)
 from app.schemas.dashboard import OrderStatusCount, PlatformStats
 from app.schemas.order import OrderResponse, PaginatedOrders
 
@@ -133,6 +139,59 @@ async def update_user(
     await db.flush()
     await db.refresh(user)
     return AdminUserResponse.model_validate(user)
+
+
+@router.post("/coupons", response_model=CouponResponse, status_code=status.HTTP_201_CREATED)
+async def create_coupon(
+    body: CouponCreate,
+    request: Request,
+    current_user: User = Depends(require_role(UserRole.admin)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a discount coupon (validated + applied at checkout by the coupon
+    service). Codes are unique."""
+    existing = (
+        await db.execute(select(Coupon).where(Coupon.code == body.code))
+    ).scalar_one_or_none()
+    if existing:
+        raise _problem(status.HTTP_409_CONFLICT, "Conflict", "Coupon code already exists", request.url.path)
+
+    coupon = Coupon(
+        code=body.code,
+        discount_type=body.discount_type,
+        value=body.value,
+        expires_at=body.expires_at,
+        usage_limit=body.usage_limit,
+    )
+    db.add(coupon)
+    await db.flush()
+    await db.refresh(coupon)
+    return CouponResponse.model_validate(coupon)
+
+
+@router.get("/coupons", response_model=list[CouponResponse])
+async def list_coupons(
+    current_user: User = Depends(require_role(UserRole.admin)),
+    db: AsyncSession = Depends(get_db),
+):
+    rows = (await db.execute(select(Coupon).order_by(Coupon.created_at.desc()))).scalars().all()
+    return [CouponResponse.model_validate(c) for c in rows]
+
+
+@router.delete("/coupons/{coupon_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def deactivate_coupon(
+    coupon_id: str,
+    request: Request,
+    current_user: User = Depends(require_role(UserRole.admin)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Soft-disable a coupon (sets is_active=False) — existing orders keep their
+    discount; the code can no longer be redeemed."""
+    coupon = (await db.execute(select(Coupon).where(Coupon.id == coupon_id))).scalar_one_or_none()
+    if not coupon:
+        raise _problem(status.HTTP_404_NOT_FOUND, "Not Found", "Coupon not found", request.url.path)
+    coupon.is_active = False
+    await db.flush()
 
 
 @router.get("/orders", response_model=PaginatedOrders)
