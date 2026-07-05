@@ -23,6 +23,8 @@ def _features_from_row(row) -> FraudFeatures:
         prior_cancellation_count=int(v["prior_cancellation_count"]),
         discount_ratio=v["discount_ratio"],
         is_off_hours=int(v["is_off_hours"]),
+        orders_from_ip_24h=int(v["orders_from_ip_24h"]),
+        billing_shipping_mismatch=int(v["billing_shipping_mismatch"]),
     )
 
 

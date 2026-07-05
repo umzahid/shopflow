@@ -40,9 +40,12 @@ crash.log
 # ML artefacts
 backend/models/*.pkl
 backend/data/*.csv
-# Trained fraud booster — regenerable via `python -m app.scripts.train_fraud_model`;
-# keep the dir (.gitkeep) but not the binary model.
+# Trained fraud booster — regenerable via `python -m app.scripts.train_fraud_model`.
+# The canonical model IS committed so fraud detection works out-of-the-box and the
+# PRD precision/recall target is demonstrable without a manual train step; other
+# .txt artifacts (experiments) stay ignored.
 backend/app/ml/artifacts/*.txt
+!backend/app/ml/artifacts/fraud_model.txt
 
 # macOS
 .DS_Store

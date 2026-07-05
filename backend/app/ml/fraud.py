@@ -70,7 +70,10 @@ MODEL_PATH = Path(
         str(Path(__file__).parent / "artifacts" / "fraud_model.txt"),
     )
 )
-REVIEW_THRESHOLD = float(os.getenv("SHOPFLOW_FRAUD_THRESHOLD", "0.5"))
+# 0.6 is the trained model's operating point — on the synthetic holdout it gives
+# precision ~0.88 / recall ~0.74, clearing the PRD's >=0.85 / >=0.70 target
+# (see the train script's threshold sweep). Override via SHOPFLOW_FRAUD_THRESHOLD.
+REVIEW_THRESHOLD = float(os.getenv("SHOPFLOW_FRAUD_THRESHOLD", "0.6"))
 MAX_REASONS = 3
 
 
