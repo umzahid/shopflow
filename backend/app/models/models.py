@@ -7,6 +7,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from pgvector.sqlalchemy import Vector
 from app.core.database import Base
 
 
@@ -63,6 +64,25 @@ class User(TimestampMixin, Base):
     )
 
 
+class Address(TimestampMixin, Base):
+    __tablename__ = "addresses"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    label: Mapped[str] = mapped_column(String(50), nullable=False)
+    line1: Mapped[str] = mapped_column(String(255), nullable=False)
+    line2: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    city: Mapped[str] = mapped_column(String(100), nullable=False)
+    state: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    postal_code: Mapped[str] = mapped_column(String(20), nullable=False)
+    country: Mapped[str] = mapped_column(String(2), nullable=False)
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    __table_args__ = (
+        Index("ix_addresses_user_id", "user_id"),
+    )
+
+
 class Category(Base):
     __tablename__ = "categories"
 
@@ -89,6 +109,7 @@ class Product(TimestampMixin, Base):
     images: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False, default=list)
     status: Mapped[ProductStatus] = mapped_column(Enum(ProductStatus), nullable=False, default=ProductStatus.draft)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(384), nullable=True)
 
     merchant: Mapped["User"] = relationship("User", back_populates="products", foreign_keys=[merchant_id])
     category: Mapped["Category | None"] = relationship("Category", back_populates="products")
@@ -110,6 +131,8 @@ class Order(TimestampMixin, Base):
     status: Mapped[OrderStatus] = mapped_column(Enum(OrderStatus), nullable=False, default=OrderStatus.pending)
     total_amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     shipping_address: Mapped[dict] = mapped_column(JSON, nullable=False)
+    billing_address: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
     coupon_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), ForeignKey("coupons.id", ondelete="SET NULL"), nullable=True)
     discount_amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False, default=0)
     fraud_score: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
@@ -122,6 +145,7 @@ class Order(TimestampMixin, Base):
     __table_args__ = (
         Index("ix_orders_customer_id", "customer_id"),
         Index("ix_orders_status", "status"),
+        Index("ix_orders_ip_address", "ip_address"),
     )
 
 

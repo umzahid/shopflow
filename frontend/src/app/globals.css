@@ -1,0 +1,147 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * ShopFlow tokens — derived from design-system/shopflow/MASTER.md
+ * Style: Vibrant & Block-based · Pattern: Marketplace / Directory
+ * Trust blue + transaction green; light & dark designed in tandem.
+ */
+:root {
+  --background: #f8fafc;       /* slate-50, cool neutral */
+  --foreground: #0f172a;       /* slate-900 — high-contrast body text (~16:1 on background) */
+  --muted: #e2e8f0;            /* slate-200 — chip / panel backdrop */
+  --muted-foreground: #475569; /* slate-600 — meets 4.5:1 on background */
+  --surface: #ffffff;
+  --border: #cbd5e1;           /* slate-300 */
+
+  /* Greens stay for the transaction CTA. Blue replaces purple as brand. */
+  --primary: #15803d;          /* transaction green — Add to cart, Search submit */
+  --primary-foreground: #ffffff;
+  --primary-hover: #14532d;
+
+  --secondary: #1d4ed8;        /* blue-700 trust blue — brand, outlined buttons, links (~7:1 on white) */
+  --secondary-foreground: #ffffff;
+  --secondary-hover: #1e3a8a;  /* blue-900 */
+
+  --accent: #60a5fa;            /* blue-400 — chips, decorative tags */
+  --accent-foreground: #0c1322;
+
+  --danger: #dc2626;
+  --danger-foreground: #ffffff;
+
+  --ring: #2563eb;              /* blue-600 — visible focus ring on white */
+
+  /* Neutral slate-based shadows read cleaner on the cool background. */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 6px rgba(15, 23, 42, 0.08), 0 2px 4px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 10px 15px rgba(15, 23, 42, 0.10), 0 4px 6px rgba(15, 23, 42, 0.05);
+  --shadow-xl: 0 20px 25px rgba(15, 23, 42, 0.12);
+}
+
+.dark {
+  --background: #0b1220;       /* near slate-950, slight blue tint */
+  --foreground: #f1f5f9;       /* slate-100 */
+  --muted: #1e293b;            /* slate-800 */
+  --muted-foreground: #94a3b8; /* slate-400 */
+  --surface: #0f172a;          /* slate-900 */
+  --border: #334155;           /* slate-700 */
+
+  --primary: #22c55e;          /* brighter green keeps contrast on dark surfaces */
+  --primary-foreground: #052e16;
+  --primary-hover: #16a34a;
+
+  --secondary: #60a5fa;        /* lifted blue-400 for dark-mode legibility */
+  --secondary-foreground: #0c1322;
+  --secondary-hover: #3b82f6;  /* blue-500 */
+
+  --accent: #93c5fd;            /* blue-300 */
+  --accent-foreground: #0c1322;
+
+  --danger: #ef4444;
+  --danger-foreground: #1f0a0a;
+
+  --ring: #60a5fa;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5), 0 4px 6px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.55);
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-nunito-sans), system-ui, -apple-system, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-rubik), system-ui, -apple-system, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .shadow-token-sm { box-shadow: var(--shadow-sm); }
+  .shadow-token-md { box-shadow: var(--shadow-md); }
+  .shadow-token-lg { box-shadow: var(--shadow-lg); }
+  .shadow-token-xl { box-shadow: var(--shadow-xl); }
+}
+
+/* Drawer slide-ins — 240ms ease-out per spec. Reduced-motion users get
+ * an instant snap-in instead of a slide. */
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+@keyframes slide-in-left {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+.animate-slide-in-right { animation: slide-in-right 240ms ease-out; }
+.animate-slide-in-left  { animation: slide-in-left  240ms ease-out; }
+
+/* Entry + ambient motion for hero/cards. transform/opacity only — no layout shift. */
+@keyframes fade-up {
+  from { opacity: 0; transform: translate3d(0, 12px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes kenburns {
+  /* Subtle, looping zoom-and-drift for hero/feature imagery. */
+  0%   { transform: scale(1.04) translate3d(0, 0, 0); }
+  50%  { transform: scale(1.08) translate3d(-1%, -0.5%, 0); }
+  100% { transform: scale(1.04) translate3d(0, 0, 0); }
+}
+@keyframes blob-drift {
+  0%, 100% { transform: translate3d(-50%, 0, 0) scale(1); }
+  50%      { transform: translate3d(-50%, 2%, 0) scale(1.06); }
+}
+
+.animate-fade-up   { animation: fade-up 480ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.animate-fade-in   { animation: fade-in 320ms ease-out both; }
+.animate-kenburns  { animation: kenburns 18s ease-in-out infinite; }
+.animate-blob      { animation: blob-drift 10s ease-in-out infinite; }
+
+.delay-100 { animation-delay: 100ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-400 { animation-delay: 400ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-in-right,
+  .animate-slide-in-left,
+  .animate-fade-up,
+  .animate-fade-in,
+  .animate-kenburns,
+  .animate-blob {
+    animation: none !important;
+  }
+}

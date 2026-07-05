@@ -1,25 +1,66 @@
+import asyncio
+import logging
+import time
+import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import HTTPException as FastAPIHTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from app.api import auth
+from app.api import admin, auth, cart, merchant, orders, products, reviews, users, webhooks
 from app.core.config import settings
+from app.core.database import engine
+from app.core.logging import configure_logging, trace_id_var
+from app.core.metrics import instrument_engine, refresh_active_orders_loop
 from app.core.redis import close_redis
+from app.core.security import decode_access_token
+
+configure_logging()
+instrument_engine(engine)
+_access_logger = logging.getLogger("shopflow.access")
 
 
-limiter = Limiter(key_func=get_remote_address, default_limits=[settings.RATE_LIMIT_PUBLIC])
+def _rate_limit_key(request: Request) -> str:
+    """Bucket authenticated requests per user, anonymous per IP. A valid bearer
+    token → `user:<id>`, otherwise the client IP. Pairs with `_rate_limit_value`
+    to give the two tiers the PRD asks for."""
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("bearer "):
+        try:
+            payload = decode_access_token(auth.split(" ", 1)[1])
+            return f"user:{payload['sub']}"
+        except Exception:  # noqa: BLE001 - any decode failure falls back to IP
+            pass
+    return f"ip:{get_remote_address(request)}"
+
+
+def _rate_limit_value(key: str) -> str:
+    """slowapi passes the resolved key here (param name must be `key`). Per-user
+    buckets get the authenticated tier; everyone else the public tier."""
+    return (
+        settings.RATE_LIMIT_AUTHENTICATED
+        if key.startswith("user:")
+        else settings.RATE_LIMIT_PUBLIC
+    )
+
+
+limiter = Limiter(key_func=_rate_limit_key, default_limits=[_rate_limit_value])
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    yield
-    await close_redis()
+    task = asyncio.create_task(refresh_active_orders_loop())
+    try:
+        yield
+    finally:
+        task.cancel()
+        await close_redis()
 
 
 app = FastAPI(
@@ -53,8 +94,37 @@ async def security_headers(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # API responses are consumed by our own origin's fetch() only; same-origin
+    # CORP blocks other sites from embedding them as no-cors resources.
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
     if "server" in response.headers:
         del response.headers["server"]
+    return response
+
+
+# Structured request logging: assign a traceId, time the request, emit one JSON
+# access line with durationMs, and echo the id back as X-Request-ID.
+@app.middleware("http")
+async def request_logging(request: Request, call_next):
+    trace_id = request.headers.get("x-request-id") or uuid.uuid4().hex
+    token = trace_id_var.set(trace_id)
+    start = time.perf_counter()
+    try:
+        response = await call_next(request)
+    finally:
+        duration_ms = round((time.perf_counter() - start) * 1000, 2)
+    response.headers["X-Request-ID"] = trace_id
+    _access_logger.info(
+        "request",
+        extra={
+            "duration_ms": duration_ms,
+            "method": request.method,
+            "path": request.url.path,
+            "status": response.status_code,
+            "client_ip": request.client.host if request.client else None,
+        },
+    )
+    trace_id_var.reset(token)
     return response
 
 
@@ -93,5 +163,19 @@ async def health():
     return {"status": "ok", "service": settings.APP_NAME}
 
 
+# Prometheus /metrics endpoint — scraped by prometheus.yml every 15s.
+# Exposes http_requests_total, http_request_duration_seconds_*, and the
+# process_* defaults that the Grafana dashboard queries.
+Instrumentator().instrument(app).expose(app, endpoint="/metrics", tags=["health"])
+
+
 # Routers
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(products.router, prefix="/api/v1")
+app.include_router(cart.router, prefix="/api/v1")
+app.include_router(orders.router, prefix="/api/v1")
+app.include_router(reviews.router, prefix="/api/v1")
+app.include_router(merchant.router, prefix="/api/v1")
+app.include_router(admin.router, prefix="/api/v1")
+app.include_router(users.router, prefix="/api/v1")
+app.include_router(webhooks.router, prefix="/api/v1")

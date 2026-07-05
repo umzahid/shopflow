@@ -1,0 +1,13 @@
+# Perf-run overlay — raises the per-IP rate limit so a single-host k6 run
+# isn't throttled to 429s (all VUs share one client IP under slowapi's
+# get_remote_address keying). NEVER use this overlay outside perf runs.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.override.yml \
+#     -f perf/docker-compose.perf.yml up -d backend
+#
+# Restore the real limit afterwards by recreating without the overlay:
+#   docker compose up -d backend
+services:
+  backend:
+    environment:
+      RATE_LIMIT_PUBLIC: "1000000/minute"

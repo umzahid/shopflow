@@ -1,0 +1,112 @@
+"use client";
+
+import { ShoppingCart, Star } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import { useState } from "react";
+
+import { Button } from "@/components/ui/Button";
+import { productCoverUrl } from "@/lib/images";
+import { cn, formatPrice } from "@/lib/utils";
+import type { Product } from "@/types/api";
+
+interface ProductCardProps {
+  product: Product;
+  onAddToCart?: (product: Product) => void;
+  className?: string;
+}
+
+function stockBadge(qty: number): { label: string; tone: string } {
+  // Stock state uses semantic color + text label so it's never color-only meaning.
+  if (qty <= 0)
+    return { label: "Sold out", tone: "bg-danger text-danger-foreground" };
+  if (qty <= 5)
+    return { label: "Low stock", tone: "bg-accent text-accent-foreground" };
+  return { label: "In stock", tone: "bg-secondary/10 text-secondary" };
+}
+
+export function ProductCard({ product, onAddToCart, className }: ProductCardProps) {
+  const badge = stockBadge(product.stock_qty);
+  const outOfStock = product.stock_qty <= 0;
+  const cover = productCoverUrl(product, { w: 600, h: 600 });
+  const [loaded, setLoaded] = useState(false);
+
+  return (
+    <article
+      className={cn(
+        // Lift on hover via translateY + shadow — does NOT shift sibling layout
+        // (the card occupies a fixed grid cell), so safe per "layout-shifting hovers" rule.
+        "group flex flex-col gap-3 rounded-xl border border-border bg-surface p-4",
+        "shadow-token transition-[box-shadow,transform] duration-300",
+        "hover:shadow-token-lg hover:-translate-y-1",
+        "motion-reduce:transition-none motion-reduce:hover:transform-none",
+        "focus-within:shadow-token-lg",
+        className,
+      )}
+    >
+      <Link
+        href={`/products/${product.id}`}
+        className="relative block aspect-[4/3] w-full overflow-hidden rounded-lg bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+        aria-label={`View ${product.title}`}
+      >
+        <Image
+          src={cover}
+          alt={product.title}
+          fill
+          sizes="(min-width: 1280px) 22vw, (min-width: 1024px) 30vw, (min-width: 640px) 45vw, 90vw"
+          onLoad={() => setLoaded(true)}
+          // scale-110 lives inside overflow-hidden — no layout shift outside the frame.
+          // Image fades in once decoded so the swap from skeleton bg is smooth, not a snap.
+          className={cn(
+            "object-cover transition-[transform,opacity] duration-500 ease-out",
+            "group-hover:scale-110",
+            "motion-reduce:transition-none motion-reduce:group-hover:scale-100",
+            loaded ? "opacity-100" : "opacity-0",
+          )}
+        />
+        <span
+          className={cn(
+            "absolute right-2 top-2 rounded-full px-2.5 py-1 text-xs font-semibold shadow-token-sm",
+            badge.tone,
+          )}
+        >
+          {badge.label}
+        </span>
+      </Link>
+
+      <div className="flex flex-1 flex-col gap-2">
+        <h3 className="line-clamp-2 font-heading text-sm font-medium leading-snug text-foreground">
+          <Link
+            href={`/products/${product.id}`}
+            className="rounded-sm hover:text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+          >
+            {product.title}
+          </Link>
+        </h3>
+        {/* Rating placeholder until reviews API is wired client-side. Stars
+            convey shape, not just color, satisfying color-not-only rule. */}
+        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          <Star className="h-3.5 w-3.5 fill-accent text-accent" aria-hidden="true" strokeWidth={1.5} />
+          <span className="font-medium tabular-nums">—</span>
+          <span aria-hidden="true">·</span>
+          <span>New listing</span>
+        </div>
+        <p className="font-heading text-lg font-bold tabular-nums text-foreground">
+          {formatPrice(product.price)}
+        </p>
+      </div>
+
+      <Button
+        variant="primary"
+        size="sm"
+        leftIcon={<ShoppingCart className="h-4 w-4" aria-hidden="true" strokeWidth={2} />}
+        onClick={() => onAddToCart?.(product)}
+        disabled={outOfStock}
+        aria-label={`Add ${product.title} to cart`}
+        className="w-full"
+      >
+        {outOfStock ? "Sold out" : "Add to cart"}
+      </Button>
+    </article>
+  );
+}

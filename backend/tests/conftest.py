@@ -35,6 +35,9 @@ def setup_test_db():
     async def _create():
         engine = create_async_engine(TEST_DATABASE_URL)
         async with engine.begin() as conn:
+            # pgvector must be installed before create_all — Product.embedding
+            # is Vector(384) and create_all can't emit the DDL otherwise.
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
             await conn.run_sync(Base.metadata.drop_all)
             await conn.run_sync(Base.metadata.create_all)
         await engine.dispose()
@@ -48,6 +51,60 @@ def setup_test_db():
     _sync_run(_create())
     yield
     _sync_run(_drop())
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _use_fake_encoder():
+    """Swap in the hash-based encoder for the whole test session — avoids
+    downloading the 90MB sentence-transformers model in CI, and makes semantic
+    ranking deterministic across runs."""
+    from app.services.embedding import _fake_encode, set_encoder
+
+    set_encoder(_fake_encode)
+    yield
+    set_encoder(None)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _use_fake_forecaster():
+    """Swap in the linear-projection forecaster so tests don't fit real Prophet
+    models — Prophet + cmdstanpy adds ~2s per fit and pulls in a Stan runtime
+    we don't need for exercising the API layer."""
+    from app.ml.forecast import _fake_forecast, set_forecaster
+
+    set_forecaster(_fake_forecast)
+    yield
+    set_forecaster(None)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _use_fake_fraud_scorer():
+    """Swap in the deterministic heuristic fraud scorer so tests never need a
+    trained LightGBM artifact. Same pattern as the encoder/forecaster swaps."""
+    from app.ml.fraud import _fake_score, set_scorer
+
+    set_scorer(_fake_score)
+    yield
+    set_scorer(None)
+
+
+@pytest.fixture(autouse=True)
+def _reset_copilot_llm():
+    """Reset the Copilot LLM swap hook after each test so a stray test can't
+    leave a scripted turn set for the next one."""
+    yield
+    from app.services.copilot import set_llm
+
+    set_llm(None)
+
+
+@pytest.fixture(autouse=True)
+def _reset_description_generator():
+    """Reset the description generator swap hook after each test."""
+    yield
+    from app.services.descriptions import set_generator
+
+    set_generator(None)
 
 
 # ── Function-level: truncate all rows between tests ─────────────────────────

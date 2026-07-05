@@ -2,19 +2,68 @@
 
 ---
 
-## Architecture (placeholder — add diagram in Week 8)
+## Architecture
 
-```
-[CloudFront] → [ALB] → [EKS]
-                          ├── Backend (FastAPI)
-                          │     ├── PostgreSQL (RDS)
-                          │     ├── Redis (ElastiCache)
-                          │     └── ML Services
-                          └── Frontend (Next.js)
+```mermaid
+flowchart TB
+  subgraph Client
+    U["Customer / Merchant browser"]
+  end
 
-[GitHub Actions] → [Container Registry] → [EKS]
-[Backend] → [Prometheus] → [Grafana]
+  subgraph Edge
+    CF["CloudFront (CDN)"]
+    ALB["Application Load Balancer"]
+  end
+
+  subgraph Cluster["EKS (Terraform-provisioned)"]
+    FE["Frontend — Next.js 14<br/>storefront + merchant admin"]
+    BE["Backend — FastAPI (async)"]
+  end
+
+  subgraph Data
+    PG[("PostgreSQL 15<br/>+ pgvector (RDS)")]
+    RD[("Redis 7<br/>(ElastiCache)")]
+    S3[("S3<br/>product images")]
+    SM["Secrets Manager"]
+  end
+
+  subgraph ML["ML / AI"]
+    SEARCH["Hybrid search<br/>MiniLM + pgvector"]
+    FORECAST["Demand forecast<br/>Prophet"]
+    FRAUD["Fraud scoring<br/>LightGBM + TreeSHAP"]
+    LLM["Claude API<br/>Copilot + descriptions + summary"]
+  end
+
+  subgraph Obs["Observability"]
+    PROM["Prometheus /metrics"]
+    GRAF["Grafana dashboards"]
+    CW["CloudWatch logs + alarms"]
+  end
+
+  U --> CF --> ALB
+  CF -->|static assets| S3
+  ALB --> FE
+  ALB --> BE
+  FE -->|"/api/v1"| BE
+  BE --> PG
+  BE --> RD
+  BE --> S3
+  BE --> SM
+  BE --> SEARCH & FORECAST & FRAUD & LLM
+  SEARCH --> PG
+  BE --> PROM --> GRAF
+  BE --> CW
+
+  subgraph CICD["CI/CD — GitHub Actions (12 stages)"]
+    GH["push / PR"] --> LINT["lint · test · scan"] --> BUILD["build & push (GHCR, SHA)"] --> DEPLOY["staging → prod (approval)"]
+  end
+  DEPLOY -.-> Cluster
 ```
+
+> Cloud infra (EKS, RDS, ElastiCache, S3, CloudFront, Secrets Manager,
+> CloudWatch) is defined in Terraform under `infrastructure/` and validated
+> offline — **not applied**, per the free-tier constraint (see
+> `docs/aws-free-tier.md`). Locally the whole stack runs via `docker compose`.
 
 ## Tech Stack
 

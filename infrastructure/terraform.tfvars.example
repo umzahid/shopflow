@@ -1,0 +1,36 @@
+# Copy to terraform.tfvars and adjust. NO SECRETS here — VPC/EKS take no secrets;
+# AWS credentials come from your environment (AWS_PROFILE / env vars / IAM role),
+# never from this file.
+region      = "us-east-1"
+project     = "shopflow"
+environment = "dev"
+
+vpc_cidr           = "10.0.0.0/16"
+az_count           = 2 # minimum for EKS; keeps subnet/NAT footprint small
+single_nat_gateway = true
+
+cluster_version = "1.30"
+# t3.small = practical EKS minimum. NOTE: EKS is NEVER free-tier (~$73/mo
+# control plane + ~$32/mo NAT). For a $0 deployment see docs/aws-free-tier.md.
+node_instance_types = ["t3.small"]
+
+# Set false for prod (reach the API via VPN/bastion inside the VPC).
+endpoint_public_access = true
+# Restrict this to your office / VPN egress CIDRs before a real apply.
+public_access_cidrs = ["0.0.0.0/0"]
+
+# CloudFront CDN
+cdn_price_class = "PriceClass_100"
+# cdn_aliases             = ["cdn.example.com"]
+# cdn_acm_certificate_arn = "arn:aws:acm:us-east-1:<account-id>:certificate/<id>"
+
+# Database / cache
+db_instance_class = "db.t3.medium"
+db_multi_az       = true
+redis_node_type   = "cache.t3.micro"
+
+# Monitoring + tags
+billing_threshold_usd = 50
+# alarm_email         = "ops@example.com"
+owner       = "platform-team"
+cost_center = "engineering"

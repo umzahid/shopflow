@@ -1,0 +1,32 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: shopflow
+  namespace: shopflow
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    # HTTP-only by default (no ACM certificate required — free-tier friendly).
+    # For TLS: add {"HTTPS":443} to listen-ports, set ssl-redirect: "443", and
+    # provide alb.ingress.kubernetes.io/certificate-arn (plus host: rules).
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+    # Health-check paths are per-Service annotations (backend /health, frontend /).
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 8000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 3000

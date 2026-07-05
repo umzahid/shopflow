@@ -1,0 +1,54 @@
+{
+  "corpus": [
+    {"title": "Wireless Noise-Cancelling Headphones", "description": "Over-ear bluetooth headphones with active noise cancellation and 30-hour battery."},
+    {"title": "True Wireless Earbuds", "description": "In-ear bluetooth earbuds with charging case and touch controls."},
+    {"title": "Wired Studio Headphones", "description": "Closed-back over-ear monitoring headphones for music production."},
+    {"title": "Portable Bluetooth Speaker", "description": "Waterproof rechargeable speaker with deep bass for outdoor use."},
+    {"title": "Stainless Steel Water Bottle", "description": "Insulated 1L vacuum flask that keeps drinks cold for 24 hours."},
+    {"title": "Ceramic Coffee Mug", "description": "12oz stoneware mug, microwave and dishwasher safe."},
+    {"title": "Cast Iron Skillet", "description": "Pre-seasoned 12-inch frying pan for stovetop and oven cooking."},
+    {"title": "Yoga Mat", "description": "Non-slip 6mm exercise mat for yoga and pilates."},
+    {"title": "Running Shoes", "description": "Lightweight cushioned trainers for road running."},
+    {"title": "Mechanical Keyboard", "description": "Backlit tactile switch keyboard for typing and gaming."},
+    {"title": "USB-C Charging Cable", "description": "Braided fast-charge cable, 2 meter, USB-C to USB-C."},
+    {"title": "Laptop Backpack", "description": "Water-resistant backpack with padded 15-inch laptop sleeve."}
+  ],
+  "queries": [
+    {"query": "bluetooth headphones", "relevant": [
+      {"title": "Wireless Noise-Cancelling Headphones", "relevance": 3},
+      {"title": "True Wireless Earbuds", "relevance": 2},
+      {"title": "Wired Studio Headphones", "relevance": 1}
+    ]},
+    {"query": "earbuds", "relevant": [
+      {"title": "True Wireless Earbuds", "relevance": 3},
+      {"title": "Wireless Noise-Cancelling Headphones", "relevance": 1}
+    ]},
+    {"query": "speaker for outdoors", "relevant": [
+      {"title": "Portable Bluetooth Speaker", "relevance": 3}
+    ]},
+    {"query": "insulated water bottle", "relevant": [
+      {"title": "Stainless Steel Water Bottle", "relevance": 3}
+    ]},
+    {"query": "coffee mug", "relevant": [
+      {"title": "Ceramic Coffee Mug", "relevance": 3}
+    ]},
+    {"query": "frying pan", "relevant": [
+      {"title": "Cast Iron Skillet", "relevance": 3}
+    ]},
+    {"query": "exercise mat for yoga", "relevant": [
+      {"title": "Yoga Mat", "relevance": 3}
+    ]},
+    {"query": "shoes for running", "relevant": [
+      {"title": "Running Shoes", "relevance": 3}
+    ]},
+    {"query": "keyboard for gaming", "relevant": [
+      {"title": "Mechanical Keyboard", "relevance": 3}
+    ]},
+    {"query": "usb c cable", "relevant": [
+      {"title": "USB-C Charging Cable", "relevance": 3}
+    ]},
+    {"query": "bag for laptop", "relevant": [
+      {"title": "Laptop Backpack", "relevance": 3}
+    ]}
+  ]
+}

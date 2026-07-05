@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     RATE_LIMIT_PUBLIC: str = "100/minute"
     RATE_LIMIT_AUTHENTICATED: str = "1000/minute"
 
+    # Payment webhook (mock Stripe). Signature = HMAC-SHA256(body, secret).
+    WEBHOOK_SECRET: str = "whsec_dev_shopflow_change_me"
+
     # S3 (Week 5)
     AWS_REGION: str = "us-east-1"
     AWS_ACCESS_KEY_ID: str = ""
@@ -44,6 +47,13 @@ class Settings(BaseSettings):
 
     # Claude API (Week 6)
     ANTHROPIC_API_KEY: str = ""
+    # Merchant Copilot (Week 6)
+    COPILOT_MODEL: str = "claude-opus-4-8"
+    COPILOT_MAX_ITERATIONS: int = 5
+    COPILOT_EFFORT: str = "medium"
+    # AI product description generator (Week 6)
+    DESCRIPTION_MODEL: str = "claude-opus-4-8"
+    DESCRIPTION_MAX_VARIANTS: int = 3
 
 
 @lru_cache

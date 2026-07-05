@@ -40,6 +40,12 @@ crash.log
 # ML artefacts
 backend/models/*.pkl
 backend/data/*.csv
+# Trained fraud booster — regenerable via `python -m app.scripts.train_fraud_model`.
+# The canonical model IS committed so fraud detection works out-of-the-box and the
+# PRD precision/recall target is demonstrable without a manual train step; other
+# .txt artifacts (experiments) stay ignored.
+backend/app/ml/artifacts/*.txt
+!backend/app/ml/artifacts/fraud_model.txt
 
 # macOS
 .DS_Store
@@ -52,3 +58,25 @@ backend/data/*.csv
 
 # Logs
 *.log
+
+# Evaluation harness reports (Entry 28) — generated artifacts
+eval_reports/
+backend/eval_reports/
+
+# Terraform (Entry 18) — working dirs, state, and real tfvars (never commit secrets)
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+!*.tfvars.example
+override.tf
+override.tf.json
+.terraform.lock.hcl
+
+# k6 perf run outputs (Entry 31)
+perf/results/
+
+# ZAP scan outputs (Entry 32)
+security/reports/
