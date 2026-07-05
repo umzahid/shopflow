@@ -47,6 +47,20 @@ def encode(text: str) -> list[float]:
     return vec.tolist()
 
 
+@lru_cache(maxsize=1024)
+def _cached_query_encode(text: str) -> tuple[float, ...]:
+    return tuple(encode(text))
+
+
+def encode_query(text: str) -> list[float]:
+    """Encode a *search query*, memoized across identical queries.
+
+    Search traffic repeats the same terms constantly, and encoding is CPU-bound
+    (~tens of ms on MiniLM); caching turns repeat queries into a dict lookup.
+    Product-write embeddings deliberately bypass this cache (each is unique)."""
+    return list(_cached_query_encode(text))
+
+
 def encode_batch(texts: list[str]) -> list[list[float]]:
     if not texts:
         return []
@@ -67,3 +81,4 @@ def set_encoder(fn: Callable[[str], list[float]] | None) -> None:
     """Test hook — swap in a custom encoder or None to restore the default."""
     global _encoder_override
     _encoder_override = fn
+    _cached_query_encode.cache_clear()  # don't serve vectors from the old encoder
