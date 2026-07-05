@@ -25,10 +25,13 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - name: Install lint deps
-        run: pip install flake8
+        run: pip install flake8 black
 
       - name: flake8
         run: flake8 app/ tests/ --max-line-length=120 --extend-ignore=E501,W503,E203
+
+      - name: black --check
+        run: black --check app/ tests/
 
   # ── 2. Frontend Lint ───────────────────────────────────────────────────────
   lint-frontend:
@@ -49,6 +52,25 @@ jobs:
 
       - run: npm ci
       - run: npm run lint
+
+      # Prettier formatting (advisory — formatting wasn't enforced from day 1,
+      # so report drift without blocking merges).
+      - name: prettier --check
+        run: npx prettier --check "src/**/*.{ts,tsx,css}"
+        continue-on-error: true
+
+  # ── 2b. Docs Lint ──────────────────────────────────────────────────────────
+  lint-docs:
+    name: Lint (docs)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: markdownlint
+        run: npx --yes markdownlint-cli2 "**/*.md" "#node_modules" "#**/node_modules"
+        continue-on-error: true
 
   # ── 3. Backend Tests ───────────────────────────────────────────────────────
   test-backend:
@@ -315,3 +337,96 @@ jobs:
           format: table
           severity: HIGH,CRITICAL
           exit-code: "0"
+
+      # SAST — Semgrep's auto ruleset (OWASP-ish). Report-only like Trivy so
+      # noisy findings don't block; triage in the job log / Security tab.
+      - name: Semgrep (SAST)
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: p/ci
+        continue-on-error: true
+
+      # Secrets scan — flags committed credentials. Test fixtures / CI env carry
+      # obvious dummy tokens, so this is report-only; a real leak shows in the log.
+      - name: detect-secrets
+        run: |
+          pip install detect-secrets
+          detect-secrets scan \
+            --exclude-files '\.github/workflows/.*' \
+            --exclude-files '.*/tests/.*' \
+            --exclude-files 'frontend/package-lock\.json' \
+            | tee detect-secrets-report.json
+        continue-on-error: true
+
+  # ── 9. Build & Push (main only) ────────────────────────────────────────────
+  build-push:
+    name: Build & push images
+    runs-on: ubuntu-latest
+    needs: [smoke, security-scan]
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push backend (tagged with git SHA)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/backend:${{ github.sha }}
+            ghcr.io/${{ github.repository }}/backend:latest
+          cache-from: type=gha,scope=backend
+
+      - name: Build & push frontend (tagged with git SHA)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/frontend:${{ github.sha }}
+            ghcr.io/${{ github.repository }}/frontend:latest
+          cache-from: type=gha,scope=frontend
+
+  # ── 10. Staging Deploy ─────────────────────────────────────────────────────
+  deploy-staging:
+    name: Deploy to staging
+    runs-on: ubuntu-latest
+    needs: build-push
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: staging
+    steps:
+      - uses: actions/checkout@v4
+      # Free-tier target: a single compose host. The real deploy would `ssh`
+      # to the staging box and `docker compose pull && up -d` the SHA-tagged
+      # images. Documented placeholder — no staging infra is provisioned.
+      - name: Deploy (placeholder)
+        run: |
+          echo "Deploying ghcr.io/${{ github.repository }}/*:${{ github.sha }} to staging"
+          echo "Real step: ssh + docker compose pull && docker compose up -d"
+
+  # ── 11. Production Deploy (manual approval) ────────────────────────────────
+  deploy-production:
+    name: Deploy to production
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    if: github.ref == 'refs/heads/main'
+    # The `production` GitHub Environment must have "Required reviewers"
+    # enabled — that gives the manual approval gate the PRD asks for.
+    environment:
+      name: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy (placeholder)
+        run: echo "Promoting ${{ github.sha }} to production after approval"
