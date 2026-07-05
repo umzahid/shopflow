@@ -1,5 +1,12 @@
 # ShopFlow — Project Status Report
 
+> **⚠️ Superseded (2026-07-06):** a full PRD gap-closing sprint has since landed
+> Domains 1–5 as working deliverables (backend endpoints, merchant admin + 10
+> components, observability + 12-stage CI, Terraform modules, fraud model hitting
+> target). See **`docs/prd-gap-analysis.md`** (top update block) for the current
+> per-domain status. The domain table below reflects the earlier snapshot.
+
+
 **Date:** 2026-07-03 · **Branch:** `week-3-task` at `62dc453` (60 commits ahead of origin, **unpushed**)
 **Assignment:** 8-week GenAI upskilling · **Graded artifact:** `PROMPT_LOG.md` — **36 / 36 entries filled**
 
