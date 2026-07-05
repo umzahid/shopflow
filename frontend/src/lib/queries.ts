@@ -8,6 +8,8 @@ import {
 import { api } from "@/lib/api";
 import type {
   Order,
+  OrderTracking,
+  PaginatedOrders,
   PaginatedProducts,
   PaginatedReviews,
   Product,
@@ -108,7 +110,9 @@ export function useProductSearch(
 
 export const orderKeys = {
   all: ["orders"] as const,
+  mine: () => [...orderKeys.all, "mine"] as const,
   detail: (id: string) => [...orderKeys.all, "detail", id] as const,
+  tracking: (id: string) => [...orderKeys.all, "tracking", id] as const,
 };
 
 export function useOrder(id: string): UseQueryResult<Order, Error> {
@@ -117,5 +121,23 @@ export function useOrder(id: string): UseQueryResult<Order, Error> {
     queryFn: () => api<Order>(`/orders/${id}`),
     enabled: !!id,
     staleTime: 10_000,
+  });
+}
+
+/** The signed-in customer's own orders (GET /orders is role-scoped). */
+export function useMyOrders(): UseQueryResult<PaginatedOrders, Error> {
+  return useQuery({
+    queryKey: orderKeys.mine(),
+    queryFn: () => api<PaginatedOrders>(`/orders?page_size=50`),
+    staleTime: 10_000,
+  });
+}
+
+export function useOrderTracking(id: string): UseQueryResult<OrderTracking, Error> {
+  return useQuery({
+    queryKey: orderKeys.tracking(id),
+    queryFn: () => api<OrderTracking>(`/orders/${id}/tracking`),
+    enabled: !!id,
+    staleTime: 30_000,
   });
 }

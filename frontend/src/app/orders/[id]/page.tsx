@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 
 import { AuthGuard } from "@/components/AuthGuard";
 import { Header } from "@/components/Header";
+import { OrderTimeline } from "@/components/OrderTimeline";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 import { ApiError } from "@/lib/api";
 import { useOrder } from "@/lib/queries";
@@ -193,6 +194,21 @@ function OrderContent() {
               </Link>
             </section>
           </div>
+
+          {/* Delivery tracking */}
+          <section
+            aria-labelledby="tracking-title"
+            className="mt-6 rounded-xl border border-border bg-surface p-5 shadow-token-sm"
+          >
+            <h2
+              id="tracking-title"
+              className="mb-4 flex items-center gap-2 font-heading text-base font-bold text-foreground"
+            >
+              <Package className="h-4 w-4" aria-hidden="true" strokeWidth={2} />
+              Tracking
+            </h2>
+            <OrderTimeline orderId={order.id} />
+          </section>
         </>
       )}
     </>

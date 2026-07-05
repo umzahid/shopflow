@@ -49,13 +49,14 @@ export function AuthMenu() {
           Dashboard
         </Link>
       )}
-      <span
-        className="inline-flex h-11 items-center gap-2 rounded-lg bg-muted/60 px-3 text-sm font-semibold text-foreground"
+      <Link
+        href="/account"
+        className="inline-flex h-11 items-center gap-2 rounded-lg bg-muted/60 px-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         title={user.email}
       >
         <UserIcon className="h-4 w-4 text-secondary" aria-hidden="true" strokeWidth={2} />
         <span className="max-w-[8rem] truncate">{user.email}</span>
-      </span>
+      </Link>
       <Button
         variant="ghost"
         size="sm"

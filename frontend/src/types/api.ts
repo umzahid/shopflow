@@ -213,6 +213,22 @@ export interface ProductForecast {
   points: ForecastPoint[];
 }
 
+export interface TrackingStage {
+  status: string;
+  label: string;
+  reached: boolean;
+  timestamp: string | null;
+}
+
+export interface OrderTracking {
+  order_id: string;
+  status: OrderStatus;
+  carrier: string;
+  tracking_number: string;
+  estimated_delivery: string | null;
+  timeline: TrackingStage[];
+}
+
 export interface ProblemDetail {
   type: string;
   title: string;

@@ -22,15 +22,15 @@ const COLUMNS: Column<Row>[] = [
   { key: "stock", header: "Stock", align: "right", render: (r) => r.stock, sortValue: (r) => r.stock },
 ];
 
-const meta = {
+const meta: Meta<typeof DataTable<Row>> = {
   title: "UI/DataTable",
   component: DataTable,
   parameters: { layout: "padded" },
   tags: ["autodocs"],
-} satisfies Meta<typeof DataTable<Row>>;
+};
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<typeof DataTable<Row>>;
 
 export const Default: Story = {
   args: { columns: COLUMNS, rows: ROWS, rowKey: (r: Row) => r.id, pageSize: 8 },
