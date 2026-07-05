@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     RATE_LIMIT_PUBLIC: str = "100/minute"
     RATE_LIMIT_AUTHENTICATED: str = "1000/minute"
 
+    # Payment webhook (mock Stripe). Signature = HMAC-SHA256(body, secret).
+    WEBHOOK_SECRET: str = "whsec_dev_shopflow_change_me"
+
     # S3 (Week 5)
     AWS_REGION: str = "us-east-1"
     AWS_ACCESS_KEY_ID: str = ""

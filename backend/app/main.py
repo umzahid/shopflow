@@ -9,12 +9,37 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from app.api import admin, auth, cart, merchant, orders, products, reviews
+from app.api import admin, auth, cart, merchant, orders, products, reviews, webhooks
 from app.core.config import settings
 from app.core.redis import close_redis
+from app.core.security import decode_access_token
 
 
-limiter = Limiter(key_func=get_remote_address, default_limits=[settings.RATE_LIMIT_PUBLIC])
+def _rate_limit_key(request: Request) -> str:
+    """Bucket authenticated requests per user, anonymous per IP. A valid bearer
+    token → `user:<id>`, otherwise the client IP. Pairs with `_rate_limit_value`
+    to give the two tiers the PRD asks for."""
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("bearer "):
+        try:
+            payload = decode_access_token(auth.split(" ", 1)[1])
+            return f"user:{payload['sub']}"
+        except Exception:  # noqa: BLE001 - any decode failure falls back to IP
+            pass
+    return f"ip:{get_remote_address(request)}"
+
+
+def _rate_limit_value(key: str) -> str:
+    """slowapi passes the resolved key here (param name must be `key`). Per-user
+    buckets get the authenticated tier; everyone else the public tier."""
+    return (
+        settings.RATE_LIMIT_AUTHENTICATED
+        if key.startswith("user:")
+        else settings.RATE_LIMIT_PUBLIC
+    )
+
+
+limiter = Limiter(key_func=_rate_limit_key, default_limits=[_rate_limit_value])
 
 
 @asynccontextmanager
@@ -111,3 +136,4 @@ app.include_router(orders.router, prefix="/api/v1")
 app.include_router(reviews.router, prefix="/api/v1")
 app.include_router(merchant.router, prefix="/api/v1")
 app.include_router(admin.router, prefix="/api/v1")
+app.include_router(webhooks.router, prefix="/api/v1")

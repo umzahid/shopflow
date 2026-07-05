@@ -50,6 +50,22 @@ class OrderStatusUpdate(BaseModel):
     status: OrderStatus
 
 
+class TrackingStage(BaseModel):
+    status: str
+    label: str
+    reached: bool
+    timestamp: datetime | None = None
+
+
+class TrackingResponse(BaseModel):
+    order_id: str
+    status: OrderStatus
+    carrier: str
+    tracking_number: str
+    estimated_delivery: datetime | None = None
+    timeline: list[TrackingStage]
+
+
 class PaginatedOrders(BaseModel):
     items: list[OrderResponse]
     next_cursor: str | None = None

@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 from uuid import UUID
 
@@ -31,6 +32,8 @@ from app.schemas.order import (
     OrderResponse,
     OrderStatusUpdate,
     PaginatedOrders,
+    TrackingResponse,
+    TrackingStage,
 )
 from app.services import cart as cart_svc
 from app.services import coupon as coupon_svc
@@ -234,6 +237,90 @@ async def get_order(
             raise _problem(status.HTTP_403_FORBIDDEN, "Forbidden", "Not your order", request.url.path)
 
     return OrderResponse.model_validate(order)
+
+
+# ---------------------------------------------------------------------------
+# GET /orders/{order_id}/tracking — delivery timeline
+# ---------------------------------------------------------------------------
+
+_TRACKING_STAGES = [
+    (OrderStatus.pending, "Order placed"),
+    (OrderStatus.confirmed, "Payment confirmed"),
+    (OrderStatus.shipped, "Shipped"),
+    (OrderStatus.delivered, "Delivered"),
+]
+_ESTIMATED_DELIVERY_DAYS = 7
+
+
+def _build_timeline(order: Order) -> list[TrackingStage]:
+    """Synthesize a status timeline. We don't persist a status-change log, so
+    completed stages are inferred from the current status; the first stage
+    carries created_at and the current stage carries updated_at."""
+    if order.status == OrderStatus.cancelled:
+        return [
+            TrackingStage(status="pending", label="Order placed", reached=True,
+                          timestamp=order.created_at),
+            TrackingStage(status="cancelled", label="Cancelled", reached=True,
+                          timestamp=order.updated_at),
+        ]
+
+    linear = [s for s, _ in _TRACKING_STAGES]
+    # pending_review sits at the pending position for progress purposes.
+    current = order.status if order.status in linear else OrderStatus.pending
+    pos = linear.index(current)
+
+    stages: list[TrackingStage] = []
+    for i, (st, label) in enumerate(_TRACKING_STAGES):
+        ts = order.created_at if i == 0 else (order.updated_at if i == pos else None)
+        stages.append(
+            TrackingStage(status=st.value, label=label, reached=i <= pos, timestamp=ts)
+        )
+    if order.status == OrderStatus.pending_review:
+        stages.insert(
+            1,
+            TrackingStage(status="pending_review", label="Under fraud review",
+                          reached=True, timestamp=order.updated_at),
+        )
+    return stages
+
+
+@router.get("/{order_id}/tracking", response_model=TrackingResponse)
+async def get_order_tracking(
+    order_id: UUID,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    order = (await db.execute(
+        select(Order).options(selectinload(Order.items)).where(Order.id == str(order_id))
+    )).scalar_one_or_none()
+    if not order:
+        raise _problem(status.HTTP_404_NOT_FOUND, "Not Found", "Order not found", request.url.path)
+
+    # Same access rules as GET /orders/{id}.
+    if current_user.role == UserRole.customer and order.customer_id != current_user.id:
+        raise _problem(status.HTTP_403_FORBIDDEN, "Forbidden", "Not your order", request.url.path)
+    if current_user.role == UserRole.merchant:
+        product_ids = [it.product_id for it in order.items]
+        owned = (await db.execute(
+            select(Product.id).where(Product.id.in_(product_ids), Product.merchant_id == current_user.id)
+        )).scalars().first()
+        if not owned:
+            raise _problem(status.HTTP_403_FORBIDDEN, "Forbidden", "Not your order", request.url.path)
+
+    estimated = (
+        None
+        if order.status in (OrderStatus.delivered, OrderStatus.cancelled)
+        else order.created_at + timedelta(days=_ESTIMATED_DELIVERY_DAYS)
+    )
+    return TrackingResponse(
+        order_id=order.id,
+        status=order.status,
+        carrier="ShopFlow Logistics",
+        tracking_number=f"SF{order.id[:8].upper()}",
+        estimated_delivery=estimated,
+        timeline=_build_timeline(order),
+    )
 
 
 # ---------------------------------------------------------------------------
