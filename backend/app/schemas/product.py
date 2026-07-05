@@ -50,6 +50,11 @@ class ProductSearchResult(ProductResponse):
     relevance_score: float
 
 
+class ProductSummaryResponse(BaseModel):
+    product_id: str
+    summary: str
+
+
 class PaginatedProducts(BaseModel):
     items: list[ProductResponse]
     next_cursor: str | None = None

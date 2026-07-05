@@ -64,6 +64,25 @@ class User(TimestampMixin, Base):
     )
 
 
+class Address(TimestampMixin, Base):
+    __tablename__ = "addresses"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    label: Mapped[str] = mapped_column(String(50), nullable=False)
+    line1: Mapped[str] = mapped_column(String(255), nullable=False)
+    line2: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    city: Mapped[str] = mapped_column(String(100), nullable=False)
+    state: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    postal_code: Mapped[str] = mapped_column(String(20), nullable=False)
+    country: Mapped[str] = mapped_column(String(2), nullable=False)
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    __table_args__ = (
+        Index("ix_addresses_user_id", "user_id"),
+    )
+
+
 class Category(Base):
     __tablename__ = "categories"
 

@@ -13,7 +13,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from app.api import admin, auth, cart, merchant, orders, products, reviews, webhooks
+from app.api import admin, auth, cart, merchant, orders, products, reviews, users, webhooks
 from app.core.config import settings
 from app.core.database import engine
 from app.core.logging import configure_logging, trace_id_var
@@ -177,4 +177,5 @@ app.include_router(orders.router, prefix="/api/v1")
 app.include_router(reviews.router, prefix="/api/v1")
 app.include_router(merchant.router, prefix="/api/v1")
 app.include_router(admin.router, prefix="/api/v1")
+app.include_router(users.router, prefix="/api/v1")
 app.include_router(webhooks.router, prefix="/api/v1")

@@ -22,9 +22,11 @@ from app.schemas.product import (
     ProductCreate,
     ProductResponse,
     ProductSearchResult,
+    ProductSummaryResponse,
     ProductUpdate,
 )
 from app.services.embedding import embed_product_text, encode as encode_query
+from app.services.summary import summarize_product
 
 router = APIRouter(prefix="/products", tags=["products"])
 
@@ -216,6 +218,27 @@ async def get_product(
     if not product:
         raise _problem(status.HTTP_404_NOT_FOUND, "Not Found", "Product not found", request.url.path)
     return ProductResponse.model_validate(product)
+
+
+@router.get("/{product_id}/summary", response_model=ProductSummaryResponse)
+async def get_product_summary(
+    product_id: UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """AI-generated one-line summary for the storefront (public). Falls back to
+    a deterministic heuristic when no LLM is configured."""
+    product = (
+        await db.execute(
+            select(Product).where(Product.id == str(product_id), Product.deleted_at.is_(None))
+        )
+    ).scalar_one_or_none()
+    if not product:
+        raise _problem(status.HTTP_404_NOT_FOUND, "Not Found", "Product not found", request.url.path)
+    return ProductSummaryResponse(
+        product_id=product.id,
+        summary=summarize_product(product.title, product.description),
+    )
 
 
 # ---------------------------------------------------------------------------
