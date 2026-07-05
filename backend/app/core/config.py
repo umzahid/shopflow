@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
 
     # Rate limiting
+    RATE_LIMIT_ENABLED: bool = True  # disabled in the test suite (see conftest)
     RATE_LIMIT_PUBLIC: str = "100/minute"
     RATE_LIMIT_AUTHENTICATED: str = "1000/minute"
 

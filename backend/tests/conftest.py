@@ -17,6 +17,13 @@ from app.core.config import settings
 from app.core.database import Base
 import app.models.models  # noqa: F401 — registers all models in Base.metadata
 
+# The suite hammers endpoints from one client; keep the rate limiter off so it
+# doesn't throttle tests. A dedicated test (test_rate_limit.py) enables its own
+# limiter to verify enforcement + Retry-After.
+from app.main import limiter as _limiter  # noqa: E402
+
+_limiter.enabled = False
+
 TEST_DATABASE_URL = settings.DATABASE_URL.rsplit("/", 1)[0] + "/shopflow_test"
 
 
