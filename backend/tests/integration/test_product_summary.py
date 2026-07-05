@@ -1,7 +1,7 @@
 """Public AI product summary endpoint."""
 import pytest
 
-from tests.integration.helpers import bearer, create_product, register_merchant
+from tests.integration.helpers import create_product, register_merchant
 
 
 @pytest.mark.asyncio

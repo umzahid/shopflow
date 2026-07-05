@@ -1,10 +1,9 @@
 """Customer account endpoints: profile, saved addresses, own reviews."""
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.config import settings
-from app.models.models import Product, Review
+from app.models.models import Review
 from tests.integration.helpers import (
     bearer,
     create_product,

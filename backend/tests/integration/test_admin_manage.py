@@ -5,7 +5,6 @@ from tests.integration.helpers import (
     add_to_cart,
     bearer,
     create_product,
-    register,
     register_admin,
     register_customer,
     register_merchant,

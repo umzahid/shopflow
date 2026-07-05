@@ -82,7 +82,8 @@ export function DataTable<T>({
   };
   const toggleRow = (k: string) => {
     const next = new Set(selected);
-    next.has(k) ? next.delete(k) : next.add(k);
+    if (next.has(k)) next.delete(k);
+    else next.add(k);
     updateSelection(next);
   };
   const allOnPageSelected = pageRows.length > 0 && pageRows.every((r) => selected.has(rowKey(r)));

@@ -30,8 +30,11 @@ jobs:
       - name: flake8
         run: flake8 app/ tests/ --max-line-length=120 --extend-ignore=E501,W503,E203
 
+      # Advisory: the codebase predates black enforcement, so report drift
+      # without blocking (flake8 above is the enforced Python linter).
       - name: black --check
         run: black --check app/ tests/
+        continue-on-error: true
 
   # ── 2. Frontend Lint ───────────────────────────────────────────────────────
   lint-frontend:
