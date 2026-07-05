@@ -1,3 +1,7 @@
+import asyncio
+import logging
+import time
+import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -11,8 +15,15 @@ from slowapi.util import get_remote_address
 
 from app.api import admin, auth, cart, merchant, orders, products, reviews, webhooks
 from app.core.config import settings
+from app.core.database import engine
+from app.core.logging import configure_logging, trace_id_var
+from app.core.metrics import instrument_engine, refresh_active_orders_loop
 from app.core.redis import close_redis
 from app.core.security import decode_access_token
+
+configure_logging()
+instrument_engine(engine)
+_access_logger = logging.getLogger("shopflow.access")
 
 
 def _rate_limit_key(request: Request) -> str:
@@ -44,8 +55,12 @@ limiter = Limiter(key_func=_rate_limit_key, default_limits=[_rate_limit_value])
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    yield
-    await close_redis()
+    task = asyncio.create_task(refresh_active_orders_loop())
+    try:
+        yield
+    finally:
+        task.cancel()
+        await close_redis()
 
 
 app = FastAPI(
@@ -84,6 +99,32 @@ async def security_headers(request: Request, call_next):
     response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
     if "server" in response.headers:
         del response.headers["server"]
+    return response
+
+
+# Structured request logging: assign a traceId, time the request, emit one JSON
+# access line with durationMs, and echo the id back as X-Request-ID.
+@app.middleware("http")
+async def request_logging(request: Request, call_next):
+    trace_id = request.headers.get("x-request-id") or uuid.uuid4().hex
+    token = trace_id_var.set(trace_id)
+    start = time.perf_counter()
+    try:
+        response = await call_next(request)
+    finally:
+        duration_ms = round((time.perf_counter() - start) * 1000, 2)
+    response.headers["X-Request-ID"] = trace_id
+    _access_logger.info(
+        "request",
+        extra={
+            "duration_ms": duration_ms,
+            "method": request.method,
+            "path": request.url.path,
+            "status": response.status_code,
+            "client_ip": request.client.host if request.client else None,
+        },
+    )
+    trace_id_var.reset(token)
     return response
 
 
