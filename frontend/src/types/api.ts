@@ -229,6 +229,44 @@ export interface OrderTracking {
   timeline: TrackingStage[];
 }
 
+export interface Address {
+  id: string;
+  label: string;
+  line1: string;
+  line2?: string | null;
+  city: string;
+  state?: string | null;
+  postal_code: string;
+  country: string;
+  is_default: boolean;
+  created_at: string;
+}
+
+export interface AddressInput {
+  label: string;
+  line1: string;
+  line2?: string | null;
+  city: string;
+  state?: string | null;
+  postal_code: string;
+  country: string;
+  is_default?: boolean;
+}
+
+export interface MyReview {
+  id: string;
+  product_id: string;
+  product_title: string;
+  rating: number;
+  body: string | null;
+  created_at: string;
+}
+
+export interface ProductSummary {
+  product_id: string;
+  summary: string;
+}
+
 export interface ProblemDetail {
   type: string;
   title: string;

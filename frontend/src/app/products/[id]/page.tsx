@@ -5,6 +5,7 @@ import {
   Minus,
   Plus,
   ShoppingCart,
+  Sparkles,
   Star,
 } from "lucide-react";
 import Image from "next/image";
@@ -19,6 +20,7 @@ import { Skeleton } from "@/components/ui/SkeletonLoader";
 import { useToast } from "@/components/ui/Toast";
 import { ApiError } from "@/lib/api";
 import { productGalleryUrls } from "@/lib/images";
+import { useProductSummary } from "@/lib/account";
 import { useProduct, useProductReviews } from "@/lib/queries";
 import { cn, formatPrice } from "@/lib/utils";
 import { useCart } from "@/store/cart";
@@ -170,6 +172,7 @@ export default function ProductDetailPage() {
                   <h1 className="text-balance font-heading text-3xl font-bold leading-tight text-foreground sm:text-4xl">
                     {product.title}
                   </h1>
+                  <AiSummary productId={product.id} />
                   <div className="flex items-center gap-3 text-sm text-muted-foreground">
                     <div className="flex items-center gap-1">
                       {[1, 2, 3, 4, 5].map((i) => (
@@ -362,6 +365,23 @@ function StockBadge({ stockQty }: { stockQty: number }) {
     >
       {label}
     </span>
+  );
+}
+
+function AiSummary({ productId }: { productId: string }) {
+  const { data, isLoading } = useProductSummary(productId);
+  if (isLoading) {
+    return <div className="h-5 w-3/4 animate-pulse rounded bg-muted motion-reduce:animate-none" aria-hidden="true" />;
+  }
+  if (!data?.summary) return null;
+  return (
+    <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
+      <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-secondary" aria-hidden="true" strokeWidth={2} />
+      <span>
+        <span className="sr-only">AI summary: </span>
+        {data.summary}
+      </span>
+    </p>
   );
 }
 
