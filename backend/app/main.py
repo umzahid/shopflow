@@ -9,8 +9,7 @@ from fastapi.exceptions import HTTPException as FastAPIHTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
+from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from app.api import admin, auth, cart, merchant, orders, products, reviews, users, webhooks
@@ -26,31 +25,53 @@ instrument_engine(engine)
 _access_logger = logging.getLogger("shopflow.access")
 
 
-def _rate_limit_key(request: Request) -> str:
-    """Bucket authenticated requests per user, anonymous per IP. A valid bearer
-    token → `user:<id>`, otherwise the client IP. Pairs with `_rate_limit_value`
-    to give the two tiers the PRD asks for."""
+RATE_LIMIT_WINDOW_SECONDS = 60
+
+
+def _parse_limit(value: str) -> int:
+    """'100/minute' -> 100."""
+    return int(value.split("/", 1)[0])
+
+
+def _rate_limit_for(request: Request) -> tuple[str, int]:
+    """(bucket key, max requests/window). Authenticated → per-user + the higher
+    tier; anonymous → per-IP + the public tier."""
     auth = request.headers.get("authorization", "")
     if auth.lower().startswith("bearer "):
         try:
             payload = decode_access_token(auth.split(" ", 1)[1])
-            return f"user:{payload['sub']}"
-        except Exception:  # noqa: BLE001 - any decode failure falls back to IP
+            return f"user:{payload['sub']}", _parse_limit(settings.RATE_LIMIT_AUTHENTICATED)
+        except Exception:  # noqa: BLE001 - any decode failure falls back to IP tier
             pass
-    return f"ip:{get_remote_address(request)}"
+    return f"ip:{get_remote_address(request)}", _parse_limit(settings.RATE_LIMIT_PUBLIC)
 
 
-def _rate_limit_value(key: str) -> str:
-    """slowapi passes the resolved key here (param name must be `key`). Per-user
-    buckets get the authenticated tier; everyone else the public tier."""
-    return (
-        settings.RATE_LIMIT_AUTHENTICATED
-        if key.startswith("user:")
-        else settings.RATE_LIMIT_PUBLIC
+# Simple in-memory fixed-window counter: key -> [window_start_monotonic, count].
+# Single-process (matches slowapi's default in-memory storage); for multi-replica
+# swap for a Redis-backed store. slowapi's Limiter is kept only as the enable
+# toggle (conftest flips .enabled off so the test suite isn't throttled).
+_rl_buckets: dict[str, list] = {}
+limiter = Limiter(
+    key_func=get_remote_address,
+    enabled=settings.RATE_LIMIT_ENABLED,
+    default_limits=[settings.RATE_LIMIT_PUBLIC],
+)
+
+
+def _too_many_requests(path: str, retry_after: int) -> JSONResponse:
+    """429 as RFC 7807 + Retry-After header (PRD security checklist)."""
+    response = JSONResponse(
+        status_code=429,
+        content={
+            "type": "https://shopflow.io/errors/rate-limit-exceeded",
+            "title": "Too Many Requests",
+            "status": 429,
+            "detail": "Rate limit exceeded. Slow down and retry after the window resets.",
+            "instance": path,
+        },
     )
-
-
-limiter = Limiter(key_func=_rate_limit_key, default_limits=[_rate_limit_value])
+    response.headers["Retry-After"] = str(retry_after)
+    return response
 
 
 @asynccontextmanager
@@ -72,9 +93,25 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Rate limiting
+# Rate limiting — enforced by the custom middleware below (fixed-window, tiered).
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.middleware("http")
+async def rate_limit(request: Request, call_next):
+    if not limiter.enabled:
+        return await call_next(request)
+    key, max_requests = _rate_limit_for(request)
+    now = time.monotonic()
+    window = _rl_buckets.get(key)
+    if window is None or now - window[0] >= RATE_LIMIT_WINDOW_SECONDS:
+        window = [now, 0]
+        _rl_buckets[key] = window
+    window[1] += 1
+    if window[1] > max_requests:
+        retry_after = max(1, int(RATE_LIMIT_WINDOW_SECONDS - (now - window[0])))
+        return _too_many_requests(request.url.path, retry_after)
+    return await call_next(request)
 
 # CORS
 app.add_middleware(
