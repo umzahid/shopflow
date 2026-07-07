@@ -7,6 +7,7 @@ import {
 
 import { api } from "@/lib/api";
 import type {
+  Category,
   Order,
   OrderTracking,
   PaginatedOrders,
@@ -19,6 +20,7 @@ import type {
 export interface ProductListFilters {
   price_min?: number;
   price_max?: number;
+  rating_min?: number;
   category_slug?: string;
   page_size?: number;
 }
@@ -40,10 +42,20 @@ function buildQuery(filters: ProductListFilters, cursor?: string): string {
   if (filters.page_size) sp.set("page_size", String(filters.page_size));
   if (filters.price_min !== undefined) sp.set("price_min", String(filters.price_min));
   if (filters.price_max !== undefined) sp.set("price_max", String(filters.price_max));
+  if (filters.rating_min !== undefined) sp.set("rating_min", String(filters.rating_min));
   if (filters.category_slug) sp.set("category_slug", filters.category_slug);
   if (cursor) sp.set("cursor", cursor);
   const qs = sp.toString();
   return qs ? `?${qs}` : "";
+}
+
+export function useCategories(): UseQueryResult<Category[], Error> {
+  return useQuery({
+    queryKey: ["categories"],
+    queryFn: () => api<Category[]>("/categories"),
+    // Taxonomy changes rarely — cache aggressively.
+    staleTime: 5 * 60_000,
+  });
 }
 
 export function useProducts(

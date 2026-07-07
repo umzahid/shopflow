@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { Header } from "@/components/Header";
 import { MerchantCTA } from "@/components/MerchantCTA";
 import { PopularTags } from "@/components/PopularTags";
+import { RecentlyViewed } from "@/components/RecentlyViewed";
 import { SearchBar } from "@/components/SearchBar";
 import { TrustStrip } from "@/components/TrustStrip";
 import { Button } from "@/components/ui/Button";
@@ -240,6 +241,9 @@ export default function Home() {
             </div>
           )}
         </section>
+
+        {/* ── Recently viewed (localStorage, renders only with history) ─ */}
+        <RecentlyViewed />
 
         {/* ── Trust strip ────────────────────────────────────────────── */}
         <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">

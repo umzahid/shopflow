@@ -11,7 +11,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Header } from "@/components/Header";
 import { RatingHistogramBar } from "@/components/RatingHistogramBar";
@@ -22,6 +22,7 @@ import { ApiError } from "@/lib/api";
 import { productGalleryUrls } from "@/lib/images";
 import { useProductSummary } from "@/lib/account";
 import { useProduct, useProductReviews } from "@/lib/queries";
+import { recordRecentlyViewed } from "@/lib/recentlyViewed";
 import { cn, formatPrice } from "@/lib/utils";
 import { useCart } from "@/store/cart";
 
@@ -30,6 +31,11 @@ export default function ProductDetailPage() {
   const id = params.id;
   const { data: product, isLoading, isError, error } = useProduct(id);
   const { data: reviews, isLoading: reviewsLoading } = useProductReviews(id);
+
+  // Feed the home page's recently-viewed strip (PRD §2.2).
+  useEffect(() => {
+    if (product) recordRecentlyViewed(product);
+  }, [product]);
   const { toast } = useToast();
   const add = useCart((s) => s.add);
   const [qty, setQty] = useState(1);

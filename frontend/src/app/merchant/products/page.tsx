@@ -4,8 +4,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Check, LineChart as LineChartIcon, Pencil, Plus, Sparkles, X } from "lucide-react";
 import { useState } from "react";
 
+import dynamic from "next/dynamic";
+
 import { Button } from "@/components/ui/Button";
-import { ForecastChart } from "@/components/ui/Charts";
 import { Drawer } from "@/components/ui/Drawer";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -21,6 +22,12 @@ import {
 } from "@/lib/merchant";
 import type { Product, ProductStatus } from "@/types/api";
 
+// Only rendered inside the forecast drawer — fetch the chart chunk on demand.
+const ForecastChart = dynamic(
+  () => import("@/components/ui/Charts").then((m) => m.ForecastChart),
+  { ssr: false },
+);
+
 const STATUS_FILTERS = [
   { label: "All statuses", value: "" },
   { label: "Active", value: "active" },
@@ -35,11 +42,45 @@ const STATUS_BADGE: Record<ProductStatus, string> = {
 };
 
 export default function ProductManagerPage() {
+  const { toast } = useToast();
+  const update = useUpdateProduct();
   const [statusFilter, setStatusFilter] = useState<"" | ProductStatus>("");
   const [createOpen, setCreateOpen] = useState(false);
   const [forecast, setForecast] = useState<Product | null>(null);
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
   const query = useMerchantProducts(statusFilter || undefined);
   const products = query.data?.items ?? [];
+
+  const allSelected = products.length > 0 && products.every((p) => selectedIds.has(p.id));
+
+  const toggleOne = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const toggleAll = () =>
+    setSelectedIds(allSelected ? new Set() : new Set(products.map((p) => p.id)));
+
+  // PRD §2.3 bulk actions — PATCH each selected product; report one summary toast.
+  const bulkSetStatus = async (next: ProductStatus) => {
+    const ids = Array.from(selectedIds);
+    const results = await Promise.allSettled(
+      ids.map((id) => update.mutateAsync({ id, patch: { status: next } })),
+    );
+    const failed = results.filter((r) => r.status === "rejected").length;
+    setSelectedIds(new Set());
+    toast(
+      failed === 0
+        ? { title: `${ids.length} product${ids.length === 1 ? "" : "s"} ${next}`, variant: "success" }
+        : {
+            title: `${ids.length - failed} updated, ${failed} failed`,
+            variant: "error",
+          },
+    );
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -75,6 +116,38 @@ export default function ProductManagerPage() {
         </span>
       </div>
 
+      {selectedIds.size > 0 && (
+        <div
+          data-testid="bulk-actions"
+          className="flex flex-wrap items-center gap-3 rounded-xl border border-secondary/40 bg-secondary/5 px-4 py-2.5"
+        >
+          <span className="text-sm font-semibold text-foreground" aria-live="polite">
+            {selectedIds.size} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={update.isPending}
+              onClick={() => bulkSetStatus("active")}
+            >
+              Activate
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              loading={update.isPending}
+              onClick={() => bulkSetStatus("archived")}
+            >
+              Archive
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
+              Clear
+            </Button>
+          </div>
+        </div>
+      )}
+
       {query.isLoading ? (
         <div className="flex flex-col gap-2">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -95,6 +168,15 @@ export default function ProductManagerPage() {
           <table className="w-full min-w-[640px] text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                <th className="w-10 px-4 py-3">
+                  <input
+                    type="checkbox"
+                    aria-label={allSelected ? "Deselect all products" : "Select all products"}
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    className="h-4 w-4 cursor-pointer rounded border-border accent-secondary"
+                  />
+                </th>
                 <th className="px-4 py-3">Product</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3 text-right">Price</th>
@@ -104,7 +186,13 @@ export default function ProductManagerPage() {
             </thead>
             <tbody className="divide-y divide-border">
               {products.map((p) => (
-                <ProductRow key={p.id} product={p} onForecast={() => setForecast(p)} />
+                <ProductRow
+                  key={p.id}
+                  product={p}
+                  selected={selectedIds.has(p.id)}
+                  onToggleSelect={() => toggleOne(p.id)}
+                  onForecast={() => setForecast(p)}
+                />
               ))}
             </tbody>
           </table>
@@ -151,7 +239,17 @@ function ForecastView({ productId }: { productId: string }) {
   );
 }
 
-function ProductRow({ product, onForecast }: { product: Product; onForecast: () => void }) {
+function ProductRow({
+  product,
+  selected,
+  onToggleSelect,
+  onForecast,
+}: {
+  product: Product;
+  selected: boolean;
+  onToggleSelect: () => void;
+  onForecast: () => void;
+}) {
   const { toast } = useToast();
   const update = useUpdateProduct();
   const [editing, setEditing] = useState(false);
@@ -194,6 +292,15 @@ function ProductRow({ product, onForecast }: { product: Product; onForecast: () 
 
   return (
     <tr className="text-foreground">
+      <td className="w-10 px-4 py-3">
+        <input
+          type="checkbox"
+          aria-label={`Select ${product.title}`}
+          checked={selected}
+          onChange={onToggleSelect}
+          className="h-4 w-4 cursor-pointer rounded border-border accent-secondary"
+        />
+      </td>
       <td className="max-w-[16rem] truncate px-4 py-3 font-medium">{product.title}</td>
       <td className="px-4 py-3">
         <span

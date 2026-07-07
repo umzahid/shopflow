@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye } from "lucide-react";
+import { Eye, Printer, ShieldAlert } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/Button";
@@ -44,6 +44,46 @@ const NEXT_STATUS: Record<OrderStatus, OrderStatus[]> = {
 
 function money(v: string): string {
   return Number(v).toLocaleString(undefined, { style: "currency", currency: "USD" });
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// PRD §2.3 "print packing slip" — a minimal, printer-friendly document in a
+// popup so the admin chrome (drawer, nav) never ends up on paper.
+function printPackingSlip(order: Order): void {
+  const a = order.shipping_address;
+  const rows = order.items
+    .map(
+      (it) =>
+        `<tr><td>${escapeHtml(it.product_id.slice(0, 8))}</td><td class="num">${it.quantity}</td></tr>`,
+    )
+    .join("");
+  const html = `<!doctype html><html><head><title>Packing slip ${escapeHtml(order.id.slice(0, 8))}</title>
+<style>
+  body { font-family: ui-sans-serif, system-ui, sans-serif; color: #0f172a; margin: 2rem; }
+  h1 { font-size: 1.25rem; margin: 0 0 0.25rem; }
+  p { margin: 0.15rem 0; font-size: 0.9rem; }
+  table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.9rem; }
+  th, td { border-bottom: 1px solid #cbd5e1; padding: 0.4rem 0.2rem; text-align: left; }
+  .num { text-align: right; }
+  .muted { color: #475569; }
+</style></head><body>
+<h1>ShopFlow — Packing slip</h1>
+<p class="muted">Order ${escapeHtml(order.id)} · ${new Date(order.created_at).toLocaleDateString()}</p>
+<h2 style="font-size:1rem;margin:1rem 0 0.25rem">Ship to</h2>
+<p>${escapeHtml(a.line1)}${a.line2 ? `, ${escapeHtml(a.line2)}` : ""}</p>
+<p>${escapeHtml(a.city)}${a.state ? `, ${escapeHtml(a.state)}` : ""} ${escapeHtml(a.postal_code)}</p>
+<p>${escapeHtml(a.country)}</p>
+<table><thead><tr><th>Item (SKU)</th><th class="num">Qty</th></tr></thead><tbody>${rows}</tbody></table>
+</body></html>`;
+  const w = window.open("", "_blank", "width=640,height=800");
+  if (!w) return; // popup blocked — nothing sensible to do
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  w.print();
 }
 
 function StatusBadge({ status }: { status: OrderStatus }) {
@@ -163,6 +203,45 @@ export default function OrderManagerPage() {
   );
 }
 
+// PRD §5.4: merchants must see why checkout flagged an order. Backend sets
+// status=pending_review when the score crosses its review threshold.
+function FraudPanel({ order }: { order: Order }) {
+  if (order.fraud_score == null) return null;
+  const score = Number(order.fraud_score);
+  const flagged = order.status === "pending_review";
+  return (
+    <section
+      data-testid="fraud-panel"
+      className={`rounded-lg border p-3 ${
+        flagged ? "border-purple-500/40 bg-purple-500/10" : "border-border bg-surface"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+            flagged
+              ? "bg-purple-500/15 text-purple-600 dark:text-purple-400"
+              : "bg-primary/10 text-primary"
+          }`}
+        >
+          <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
+          {flagged ? "Flagged for review" : "Fraud screening passed"}
+        </span>
+        <span className="tabular-nums text-xs text-muted-foreground">
+          Risk score {score.toFixed(2)}
+        </span>
+      </div>
+      {flagged && order.fraud_reasons && order.fraud_reasons.length > 0 && (
+        <ul className="mt-2 list-inside list-disc text-xs text-muted-foreground">
+          {order.fraud_reasons.map((reason) => (
+            <li key={reason}>{reason}</li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function OrderDetail({
   order,
   onUpdated,
@@ -194,10 +273,22 @@ function OrderDetail({
 
   return (
     <div className="flex flex-col gap-5 text-sm">
-      <div className="flex items-center gap-2">
-        <span className="text-muted-foreground">Status:</span>
-        <StatusBadge status={order.status} />
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground">Status:</span>
+          <StatusBadge status={order.status} />
+        </div>
+        <Button
+          size="sm"
+          variant="ghost"
+          leftIcon={<Printer className="h-4 w-4" aria-hidden="true" />}
+          onClick={() => printPackingSlip(order)}
+        >
+          Packing slip
+        </Button>
       </div>
+
+      <FraudPanel order={order} />
 
       <section>
         <h3 className="mb-2 font-heading text-sm font-bold text-foreground">Items</h3>

@@ -44,12 +44,23 @@ export class MerchantProductsPage {
 
 export class MerchantOrdersPage {
   readonly heading: Locator;
+  readonly fraudPanel: Locator;
 
   constructor(readonly page: Page) {
     this.heading = page.getByRole("heading", { name: "Orders", level: 1 });
+    this.fraudPanel = page.getByTestId("fraud-panel");
   }
 
   async goto() {
     await this.page.goto("/merchant/orders");
+  }
+
+  /** The table row for an order — the UI shows the first 8 chars of the id. */
+  row(orderId: string): Locator {
+    return this.page.getByRole("row").filter({ hasText: orderId.slice(0, 8) });
+  }
+
+  viewButton(orderId: string): Locator {
+    return this.row(orderId).getByRole("button", { name: "View" });
   }
 }

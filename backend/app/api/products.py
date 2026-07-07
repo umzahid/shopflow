@@ -17,7 +17,7 @@ from app.core.pagination import (
     encode_cursor,
     resolve_page_size,
 )
-from app.models.models import Category, Product, ProductStatus, User, UserRole
+from app.models.models import Category, Product, ProductStatus, Review, User, UserRole
 from app.schemas.product import (
     PaginatedProducts,
     ProductCreate,
@@ -175,6 +175,7 @@ async def list_products(
     category_slug: str | None = Query(default=None),
     price_min: Decimal | None = Query(default=None, ge=0),
     price_max: Decimal | None = Query(default=None, ge=0),
+    rating_min: float | None = Query(default=None, ge=1, le=5),
     merchant_id: UUID | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
@@ -193,6 +194,16 @@ async def list_products(
         stmt = stmt.where(Product.price >= price_min)
     if price_max is not None:
         stmt = stmt.where(Product.price <= price_max)
+    if rating_min is not None:
+        # NULL averages (no reviews) never satisfy >=, so unrated products are
+        # excluded once a rating floor is set — matches marketplace convention.
+        avg_rating = (
+            select(func.avg(Review.rating))
+            .where(Review.product_id == Product.id)
+            .correlate(Product)
+            .scalar_subquery()
+        )
+        stmt = stmt.where(avg_rating >= rating_min)
     if merchant_id is not None:
         stmt = stmt.where(Product.merchant_id == str(merchant_id))
 

@@ -30,6 +30,13 @@ export interface PaginatedProducts {
   next_cursor: string | null;
 }
 
+export interface Category {
+  id: string;
+  name: string;
+  slug: string;
+  parent_id: string | null;
+}
+
 export interface ProductSearchResult extends Product {
   relevance_score: number;
 }
@@ -79,6 +86,8 @@ export interface Order {
   created_at: string;
   updated_at: string;
   items: OrderItemResponse[];
+  fraud_score: string | null;
+  fraud_reasons: string[] | null;
 }
 
 export interface User {
