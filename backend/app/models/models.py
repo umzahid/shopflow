@@ -120,6 +120,7 @@ class Product(TimestampMixin, Base):
         Index("ix_products_merchant_id", "merchant_id"),
         Index("ix_products_status", "status"),
         Index("ix_products_active", "status", postgresql_where="deleted_at IS NULL"),
+        Index("ix_products_merchant_active", "merchant_id", postgresql_where="deleted_at IS NULL"),
     )
 
 
@@ -145,7 +146,11 @@ class Order(TimestampMixin, Base):
     __table_args__ = (
         Index("ix_orders_customer_id", "customer_id"),
         Index("ix_orders_status", "status"),
-        Index("ix_orders_ip_address", "ip_address"),
+        # (ip_address, created_at) serves the fraud IP-velocity lookup (ip = ? AND
+        # created_at >= now()-24h); (status, created_at) serves revenue/dashboard
+        # aggregations (status IN (...) AND created_at >= cutoff).
+        Index("ix_orders_ip_created", "ip_address", "created_at"),
+        Index("ix_orders_status_created", "status", "created_at"),
     )
 
 
