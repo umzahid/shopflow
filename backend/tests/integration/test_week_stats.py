@@ -9,7 +9,7 @@ from app.api.merchant import _gather_week_stats
 from app.core.config import settings
 from app.models.models import Order, OrderItem, OrderStatus
 
-from tests.integration.helpers import bearer, create_product, register_customer, register_merchant
+from tests.integration.helpers import create_product, register_customer, register_merchant
 
 TEST_DB_URL = settings.DATABASE_URL.rsplit("/", 1)[0] + "/shopflow_test"
 
