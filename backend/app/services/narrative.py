@@ -45,6 +45,15 @@ _narrator_override: NarratorFn | None = None
 _client = None
 
 
+def _as_float(v) -> float:
+    """Safely convert a value to float, treating non-numeric or missing values as -1.0
+    so they don't falsely trigger numeric comparisons (e.g., == 0.0)."""
+    try:
+        return float(str(v))
+    except (ValueError, TypeError):
+        return -1.0
+
+
 def _build_user_prompt(stats: dict) -> str:
     return "This week's store stats (JSON):\n" + json.dumps(stats, default=str, indent=2)
 
@@ -98,7 +107,7 @@ async def _fake_narrate(stats: dict) -> tuple[str, list[str]]:
     top = stats.get("top_products") or []
     alerts = stats.get("restock_alerts") or []
     lead = top[0]["title"] if top else "no standout product"
-    if float(str(rev)) == 0.0 and not top:
+    if _as_float(rev) == 0.0 and not top:
         narrative = "(fake) A quiet week — no recorded sales. Nothing stands out to report."
     else:
         move = f"{delta}% week-over-week" if delta is not None else "with no prior-week baseline"

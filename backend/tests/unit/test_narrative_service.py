@@ -42,6 +42,18 @@ async def test_fake_narrate_quiet_week():
 
 
 @pytest.mark.asyncio
+async def test_fake_narrate_zero_revenue_with_products():
+    """Zero revenue but non-empty top_products should use normal branch, not quiet-week."""
+    narrative, highlights = await nsvc._fake_narrate(
+        _stats(revenue_this_week="0.00", delta_pct=None, top_products=[{"title": "Ceramic Mug", "units_sold": 5, "revenue": "50.00"}])
+    )
+    assert narrative  # non-empty
+    assert "Ceramic Mug" in narrative  # should mention the top product
+    assert "quiet week" not in narrative.lower()  # should NOT trigger quiet-week branch
+    assert isinstance(highlights, list)
+
+
+@pytest.mark.asyncio
 async def test_set_narrator_override_is_used():
     async def fake(stats):
         return "OVERRIDE", ["h1"]
