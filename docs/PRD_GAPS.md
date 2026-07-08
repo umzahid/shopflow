@@ -66,8 +66,8 @@
 
 ## P2 — explicit PRD requirements, cheap to close
 
-### GAP-04 · Frontend server-side JSON logging — Domain 3 (§3.4)
-- [ ] **What:** PRD requires structured JSON logs from "backend and frontend
+### GAP-04 · Frontend server-side JSON logging — Domain 3 (§3.4) ✅ DONE 2026-07-09
+- [x] **What:** PRD requires structured JSON logs from "backend and frontend
   (server-side)" with timestamp/level/service/traceId/message/durationMs. Backend done
   (`backend/app/core/logging.py`); frontend has nothing.
 - **Evidence:** no `frontend/src/middleware.ts`; no JSON logger in frontend.
