@@ -86,3 +86,8 @@ security/reports/
 
 # LocalStack apply: transient provider override copied in by infrastructure/localstack/run.sh
 infrastructure/zz_localstack_override.tf
+
+# environment sizing tfvars contain no secrets — negation must come AFTER
+# both *.tfvars rules above (later rules win) so a fresh clone sees the
+# staging/prod separation (PRD Domain-4) and the localstack config
+!infrastructure/environments/*.tfvars
