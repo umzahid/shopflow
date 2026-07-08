@@ -6,7 +6,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { Header } from "@/components/Header";
-import { MerchantCTA } from "@/components/MerchantCTA";
 import { PopularTags } from "@/components/PopularTags";
 import { RecentlyViewed } from "@/components/RecentlyViewed";
 import { SearchBar } from "@/components/SearchBar";
@@ -245,13 +244,8 @@ export default function Home() {
         <RecentlyViewed />
 
         {/* ── Trust strip ────────────────────────────────────────────── */}
-        <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
-          <TrustStrip />
-        </section>
-
-        {/* ── Become-a-merchant CTA ──────────────────────────────────── */}
         <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 sm:pb-24 lg:px-8">
-          <MerchantCTA />
+          <TrustStrip />
         </section>
       </main>
 

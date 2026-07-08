@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Store, ShoppingBag } from "lucide-react";
+import { ShoppingBag } from "lucide-react";
 
 import { AuthMenu } from "@/components/AuthMenu";
 import { CartButton } from "@/components/CartButton";
@@ -18,13 +18,6 @@ export function Header() {
         </Link>
 
         <nav aria-label="Primary" className="flex items-center gap-1 sm:gap-2">
-          <Link
-            href="/merchant/apply"
-            className="hidden sm:inline-flex h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-          >
-            <Store className="h-4 w-4" aria-hidden="true" strokeWidth={2} />
-            Sell on ShopFlow
-          </Link>
           <ThemeToggle />
           <CartButton />
           <AuthMenu />
