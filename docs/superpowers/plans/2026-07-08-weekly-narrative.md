@@ -275,37 +275,33 @@ git commit -m "feat(narrative): single-shot Claude weekly-narrative service + sc
 
 **Files:**
 - Modify: `backend/app/api/merchant.py` (generalize `_revenue_since`, add `_gather_week_stats`)
-- Test: `backend/tests/integration/test_weekly_narrative.py` (stats portion)
+- Test: `backend/tests/integration/test_week_stats.py` (calls the helper directly)
 
 **Interfaces:**
 - Consumes: `REVENUE_STATUSES`, existing top-products query shape, `get_restock_alerts` from Task-0 codebase.
 - Produces: `_revenue_between(db, merchant_id, start_days_ago, end_days_ago) -> Decimal`; `_gather_week_stats(db, merchant_id) -> dict` with keys `revenue_this_week, revenue_prior_week, delta_pct, orders_this_week, orders_by_status, top_products, restock_alerts`.
 
+This task is self-contained: it tests `_gather_week_stats` **directly** (own DB session), so it goes green at the end of this task without needing the Task-3 endpoint.
+
 - [ ] **Step 1: Write the failing test**
 
-Create `backend/tests/integration/test_weekly_narrative.py` with a stats test. Reuse the delivered-order seeding style from `test_copilot_endpoint.py`:
+Create `backend/tests/integration/test_week_stats.py`. Seed via the client, then open a session and call the helper directly. Reuse the delivered-order seeding style from `test_copilot_endpoint.py`:
 
 ```python
-"""POST /merchant/weekly-narrative — stats gathering + endpoint, fake narrator."""
+"""_gather_week_stats — week-over-week bundle, tested directly (no endpoint)."""
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.api.merchant import _gather_week_stats
 from app.core.config import settings
 from app.models.models import Order, OrderItem, OrderStatus
-from app.services import narrative as nsvc
 
 from tests.integration.helpers import bearer, create_product, register_customer, register_merchant
 
 TEST_DB_URL = settings.DATABASE_URL.rsplit("/", 1)[0] + "/shopflow_test"
-
-
-@pytest.fixture(autouse=True)
-def _restore_narrator():
-    yield
-    nsvc.set_narrator(None)
 
 
 async def _seed_order(product_id, customer_id, unit_price, qty, days_ago):
@@ -328,34 +324,47 @@ async def _seed_order(product_id, customer_id, unit_price, qty, days_ago):
         await engine.dispose()
 
 
+async def _stats_for(merchant_id: str) -> dict:
+    engine = create_async_engine(TEST_DB_URL)
+    Session = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with Session() as db:
+            return await _gather_week_stats(db, merchant_id)
+    finally:
+        await engine.dispose()
+
+
 @pytest.mark.asyncio
 async def test_stats_split_this_vs_prior_week(client):
-    mtoken, mid = await register_merchant(client, "m-narr-stats@e.com")
-    ctoken, cid = await register_customer(client, "c-narr-stats@e.com")
+    mtoken, mid = await register_merchant(client, "m-stats-split@e.com")
+    _, cid = await register_customer(client, "c-stats-split@e.com")
     prod = await create_product(client, mtoken, title="Mug", price="10.00")
     await _seed_order(prod["id"], cid, "10.00", 5, days_ago=2)   # this week: 50
     await _seed_order(prod["id"], cid, "10.00", 3, days_ago=10)  # prior week: 30
 
-    captured = {}
+    stats = await _stats_for(mid)
+    assert Decimal(stats["revenue_this_week"]) == Decimal("50.00")
+    assert Decimal(stats["revenue_prior_week"]) == Decimal("30.00")
+    assert stats["top_products"][0]["title"] == "Mug"
 
-    async def spy(stats):
-        captured.update(stats)
-        return "ok", ["h"]
 
-    nsvc.set_narrator(spy)
-    res = await client.post("/api/v1/merchant/weekly-narrative", headers=bearer(mtoken))
-    assert res.status_code == 200, res.text
-    assert Decimal(captured["revenue_this_week"]) == Decimal("50.00")
-    assert Decimal(captured["revenue_prior_week"]) == Decimal("30.00")
-    assert captured["top_products"][0]["title"] == "Mug"
+@pytest.mark.asyncio
+async def test_stats_merchant_isolation(client):
+    ma, mida = await register_merchant(client, "m-stats-a@e.com")
+    mb, midb = await register_merchant(client, "m-stats-b@e.com")
+    _, cid = await register_customer(client, "c-stats-a@e.com")
+    pa = await create_product(client, ma, title="AlphaOnly", price="10.00")
+    await _seed_order(pa["id"], cid, "10.00", 2, days_ago=1)
+
+    stats_b = await _stats_for(midb)
+    assert Decimal(stats_b["revenue_this_week"]) == Decimal("0")
+    assert [p["title"] for p in stats_b["top_products"]] == []
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd backend && SHOPFLOW_FAKE_NARRATIVE=1 pytest tests/integration/test_weekly_narrative.py::test_stats_split_this_vs_prior_week -v`
-Expected: FAIL with 404 (endpoint not yet added) — the stats helper and route come in this task and Task 3. (This test also exercises the Task 3 route; it passes only after Task 3. Keep it here; run it at the end of Task 3.)
-
-> Note: Task 2 delivers the helpers; the assertion runs green after Task 3 mounts the route. If you prefer a Task-2-only gate, temporarily call `_gather_week_stats` directly in a throwaway REPL. The committed test is the endpoint test.
+Run: `cd backend && pytest tests/integration/test_week_stats.py -v`
+Expected: FAIL with `ImportError: cannot import name '_gather_week_stats'`
 
 - [ ] **Step 3: Generalize `_revenue_since` → `_revenue_between`**
 
@@ -448,10 +457,15 @@ async def _gather_week_stats(db: AsyncSession, merchant_id: str) -> dict:
     }
 ```
 
-- [ ] **Step 5: Commit (helpers only)**
+- [ ] **Step 5: Run the test to verify it passes**
+
+Run: `cd backend && pytest tests/integration/test_week_stats.py -v`
+Expected: PASS (2 tests).
+
+- [ ] **Step 6: Commit**
 
 ```bash
-git add backend/app/api/merchant.py backend/tests/integration/test_weekly_narrative.py
+git add backend/app/api/merchant.py backend/tests/integration/test_week_stats.py
 git commit -m "feat(narrative): week-over-week stats gathering helpers"
 ```
 
@@ -467,11 +481,53 @@ git commit -m "feat(narrative): week-over-week stats gathering helpers"
 - Consumes: `narrate`, `set_narrator`, `NarrativeError` (Task 1); `_gather_week_stats` (Task 2); `get_redis`.
 - Produces: `POST /api/v1/merchant/weekly-narrative?refresh=<bool>` → `WeeklyNarrativeResponse`.
 
-- [ ] **Step 1: Add the remaining endpoint tests**
+- [ ] **Step 1: Add the endpoint tests**
 
-Append to `backend/tests/integration/test_weekly_narrative.py`:
+Create `backend/tests/integration/test_weekly_narrative.py` (standalone — its own imports, narrator-restore fixture, and seed helper):
 
 ```python
+"""POST /merchant/weekly-narrative — endpoint, cache, isolation. Fake narrator."""
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
+
+import pytest
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from app.core.config import settings
+from app.models.models import Order, OrderItem, OrderStatus
+from app.services import narrative as nsvc
+
+from tests.integration.helpers import bearer, create_product, register_customer, register_merchant
+
+TEST_DB_URL = settings.DATABASE_URL.rsplit("/", 1)[0] + "/shopflow_test"
+
+
+@pytest.fixture(autouse=True)
+def _restore_narrator():
+    yield
+    nsvc.set_narrator(None)
+
+
+async def _seed_order(product_id, customer_id, unit_price, qty, days_ago):
+    engine = create_async_engine(TEST_DB_URL)
+    Session = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with Session() as db:
+            ts = datetime.now(timezone.utc) - timedelta(days=days_ago)
+            order = Order(
+                customer_id=customer_id, status=OrderStatus.delivered,
+                total_amount=Decimal(unit_price) * qty,
+                shipping_address={"line1": "1 X", "city": "K", "postal_code": "0", "country": "PK"},
+                created_at=ts, updated_at=ts,
+            )
+            db.add(order)
+            await db.flush()
+            db.add(OrderItem(order_id=order.id, product_id=product_id, quantity=qty, unit_price=Decimal(unit_price)))
+            await db.commit()
+    finally:
+        await engine.dispose()
+
+
 @pytest.mark.asyncio
 async def test_requires_merchant_role(client):
     ctoken, _ = await register_customer(client, "c-narr-role@e.com")
@@ -596,19 +652,21 @@ async def weekly_narrative(
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `cd backend && SHOPFLOW_FAKE_NARRATIVE=1 pytest tests/integration/test_weekly_narrative.py -v`
-Expected: PASS (all 5 tests, including `test_stats_split_this_vs_prior_week` from Task 2).
+Expected: PASS (4 tests: role guard, empty store, cache hit/refresh, isolation).
 
 - [ ] **Step 5: Run the full backend suite for regressions**
 
 Run: `cd backend && SHOPFLOW_FAKE_NARRATIVE=1 SHOPFLOW_FAKE_COPILOT=1 SHOPFLOW_FAKE_DESCRIPTIONS=1 pytest -q`
-Expected: all pass (previously 254+ tests, now +8).
+Expected: all pass (previously 254+ tests, now +9: 3 unit + 2 stats + 4 endpoint).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add backend/app/api/merchant.py backend/tests/integration/test_weekly_narrative.py
+git add backend/app/api/merchant.py backend/tests/integration/test_weekly_narrative.py backend/tests/integration/test_week_stats.py
 git commit -m "feat(narrative): POST /merchant/weekly-narrative endpoint + 24h Redis cache"
 ```
+
+(If Task 2's `test_week_stats.py` was committed separately, only `merchant.py` + `test_weekly_narrative.py` change here.)
 
 ---
 
