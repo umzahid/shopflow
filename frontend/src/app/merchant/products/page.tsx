@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, LineChart as LineChartIcon, Pencil, Plus, Sparkles, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, LineChart as LineChartIcon, Pencil, Plus, Sparkles, X } from "lucide-react";
 import { useState } from "react";
 
 import dynamic from "next/dynamic";
@@ -41,15 +41,77 @@ const STATUS_BADGE: Record<ProductStatus, string> = {
   archived: "bg-danger/10 text-danger",
 };
 
+type SortKey = "title" | "price" | "stock";
+
+/** Column header with a sort toggle; aria-sort announces direction. */
+function SortableTh({
+  label,
+  active,
+  onSort,
+  align = "left",
+}: {
+  label: string;
+  active: "asc" | "desc" | null;
+  onSort: () => void;
+  align?: "left" | "right";
+}) {
+  const Icon = active === "asc" ? ArrowUp : active === "desc" ? ArrowDown : ArrowUpDown;
+  return (
+    <th
+      className={`px-4 py-3 ${align === "right" ? "text-right" : ""}`}
+      aria-sort={active === "asc" ? "ascending" : active === "desc" ? "descending" : undefined}
+    >
+      <button
+        type="button"
+        aria-label={`Sort by ${label.toLowerCase()}`}
+        onClick={onSort}
+        className={`inline-flex items-center gap-1 rounded uppercase tracking-wide hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+          active ? "text-foreground" : ""
+        }`}
+      >
+        {label}
+        <Icon className="h-3 w-3" aria-hidden="true" />
+      </button>
+    </th>
+  );
+}
+
+const SORT_VALUE: Record<SortKey, (p: Product) => string | number> = {
+  title: (p) => p.title.toLowerCase(),
+  price: (p) => Number(p.price),
+  stock: (p) => p.stock_qty,
+};
+
 export default function ProductManagerPage() {
   const { toast } = useToast();
   const update = useUpdateProduct();
   const [statusFilter, setStatusFilter] = useState<"" | ProductStatus>("");
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" } | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [forecast, setForecast] = useState<Product | null>(null);
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
   const query = useMerchantProducts(statusFilter || undefined);
-  const products = query.data?.items ?? [];
+
+  // Search + sort are client-side over the loaded catalog; selection, count,
+  // and the table all operate on this visible set.
+  const q = search.trim().toLowerCase();
+  const filtered = (query.data?.items ?? []).filter(
+    (p) => !q || p.title.toLowerCase().includes(q),
+  );
+  const products = sort
+    ? [...filtered].sort((a, b) => {
+        const va = SORT_VALUE[sort.key](a);
+        const vb = SORT_VALUE[sort.key](b);
+        const cmp = va < vb ? -1 : va > vb ? 1 : 0;
+        return sort.dir === "asc" ? cmp : -cmp;
+      })
+    : filtered;
+
+  const toggleSort = (key: SortKey) =>
+    setSort((prev) =>
+      prev?.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" },
+    );
 
   const allSelected = products.length > 0 && products.every((p) => selectedIds.has(p.id));
 
@@ -103,7 +165,15 @@ export default function ProductManagerPage() {
         </Button>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          type="search"
+          aria-label="Search products"
+          placeholder="Search by title…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="h-11 w-full max-w-xs rounded-lg border border-border bg-surface px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
         <Select
           ariaLabel="Filter by status"
           options={STATUS_FILTERS}
@@ -177,10 +247,24 @@ export default function ProductManagerPage() {
                     className="h-4 w-4 cursor-pointer rounded border-border accent-secondary"
                   />
                 </th>
-                <th className="px-4 py-3">Product</th>
+                <SortableTh
+                  label="Product"
+                  active={sort?.key === "title" ? sort.dir : null}
+                  onSort={() => toggleSort("title")}
+                />
                 <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-right">Price</th>
-                <th className="px-4 py-3 text-right">Stock</th>
+                <SortableTh
+                  label="Price"
+                  align="right"
+                  active={sort?.key === "price" ? sort.dir : null}
+                  onSort={() => toggleSort("price")}
+                />
+                <SortableTh
+                  label="Stock"
+                  align="right"
+                  active={sort?.key === "stock" ? sort.dir : null}
+                  onSort={() => toggleSort("stock")}
+                />
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
