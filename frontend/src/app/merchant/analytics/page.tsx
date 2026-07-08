@@ -55,7 +55,6 @@ export default function AnalyticsPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <WeeklyNarrativeCard />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-heading text-2xl font-bold text-foreground sm:text-3xl">
@@ -73,6 +72,8 @@ export default function AnalyticsPage() {
           className="min-w-[12rem]"
         />
       </div>
+
+      <WeeklyNarrativeCard />
 
       <section className="rounded-xl border border-border bg-surface p-5 shadow-token-sm">
         <h2 className="mb-4 font-heading text-base font-bold text-foreground">

@@ -52,4 +52,10 @@ describe("WeeklyNarrativeCard", () => {
     await userEvent.click(screen.getByRole("button", { name: /generate weekly summary/i }));
     expect(mutate).toHaveBeenCalled();
   });
+
+  it("renders the error message when an error is returned", () => {
+    state = { mutate, isPending: false, data: undefined, error: new Error("Weekly summary isn't available on this deployment.") };
+    render(<WeeklyNarrativeCard />);
+    expect(screen.getByText("Weekly summary isn't available on this deployment.")).toBeInTheDocument();
+  });
 });

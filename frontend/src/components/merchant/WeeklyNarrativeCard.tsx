@@ -25,14 +25,14 @@ export function WeeklyNarrativeCard() {
           This week at a glance
         </h2>
         {data ? (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => mutate({ refresh: true })}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary rounded"
+            leftIcon={<RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />}
           >
-            <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
             {agoLabel(data.generated_at)}
-          </button>
+          </Button>
         ) : null}
       </div>
 
@@ -49,8 +49,8 @@ export function WeeklyNarrativeCard() {
           <p className="text-sm leading-relaxed text-foreground">{data.narrative}</p>
           {data.highlights.length > 0 ? (
             <ul className="flex flex-col gap-1">
-              {data.highlights.map((h, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
+              {data.highlights.map((h) => (
+                <li key={h} className="flex items-start gap-2 text-sm text-muted-foreground">
                   <span aria-hidden="true" className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-secondary" />
                   {h}
                 </li>
