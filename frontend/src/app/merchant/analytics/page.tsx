@@ -3,10 +3,11 @@
 import { useState } from "react";
 
 import { WeeklyNarrativeCard } from "@/components/merchant/WeeklyNarrativeCard";
-import { BarChart } from "@/components/ui/Charts";
+import { BarChart, GeoHeatMap } from "@/components/ui/Charts";
 import { Select } from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 import { useMerchantDashboard, useRevenueSummary } from "@/lib/merchant";
+import { SAMPLE_ORDERS_BY_REGION } from "@/lib/mockGeo";
 import type { OrderStatus } from "@/types/api";
 
 const RANGES = [
@@ -124,6 +125,17 @@ export default function AnalyticsPage() {
         )}
       </section>
 
+      <section className="rounded-xl border border-border bg-surface p-5 shadow-token-sm">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="font-heading text-base font-bold text-foreground">
+            Orders by region
+          </h2>
+          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Sample data
+          </span>
+        </div>
+        <GeoHeatMap regions={SAMPLE_ORDERS_BY_REGION} />
+      </section>
     </div>
   );
 }
