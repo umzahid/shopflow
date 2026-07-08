@@ -43,8 +43,8 @@
 - **Verify:** `ls docs/eval/` shows the file; number present.
 - **Commit:** `docs(eval): NDCG@3 search eval results`
 
-### GAP-02 · Terraform apply via LocalStack — Domain 4 (20-pt deliverable)
-- [ ] **What:** "terraform apply runs cleanly (can use LocalStack)" — never exercised.
+### GAP-02 · Terraform apply via LocalStack — Domain 4 (20-pt deliverable) ✅ DONE 2026-07-09
+- [x] **What:** "terraform apply runs cleanly (can use LocalStack)" — never exercised.
 - **Evidence:** no localstack config anywhere; `infrastructure/` is validate-only.
 - **How:** Add `infrastructure/environments/localstack.tfvars` + a provider override
   (endpoints → `http://localhost:4566`, `skip_credentials_validation`, etc. — standard
