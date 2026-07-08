@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     # AI product description generator (Week 6)
     DESCRIPTION_MODEL: str = "claude-opus-4-8"
     DESCRIPTION_MAX_VARIANTS: int = 3
+    NARRATIVE_MODEL: str = "claude-opus-4-8"
 
 
 @lru_cache
