@@ -4,7 +4,8 @@ Revenue is recognized for orders in (confirmed, shipped, delivered) — i.e.,
 past the pending/pending_review gate but not cancelled. Each merchant only
 sees data on their own products.
 """
-from datetime import date, timedelta
+import json
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -14,6 +15,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.deps import require_role
+from app.core.redis import get_redis
 from app.core.pagination import (
     DEFAULT_PAGE_SIZE,
     MAX_PAGE_SIZE,
@@ -47,9 +49,11 @@ from app.schemas.dashboard import (
     TopProduct,
 )
 from app.schemas.descriptions import DescriptionRequest, DescriptionResponse
+from app.schemas.narrative import WeeklyNarrativeResponse
 from app.ml.forecast import forecast_product_demand
 from app.services import copilot as copilot_svc
 from app.services import descriptions as descriptions_svc
+from app.services import narrative as narrative_svc
 from app.services.restock import get_restock_alerts
 
 router = APIRouter(prefix="/merchant", tags=["merchant"])
@@ -438,3 +442,47 @@ async def generate_description(
         title = "Service Unavailable" if e.status_code == status.HTTP_503_SERVICE_UNAVAILABLE else "Bad Gateway"
         raise _problem(e.status_code, title, e.detail, request.url.path)
     return DescriptionResponse(variants=variants)
+
+
+_NARRATIVE_TTL_SECONDS = 86400  # 24h
+
+
+@router.post("/weekly-narrative", response_model=WeeklyNarrativeResponse)
+async def weekly_narrative(
+    request: Request,
+    refresh: bool = Query(default=False),
+    current_user: User = Depends(require_role(UserRole.merchant)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Button-triggered AI summary of the merchant's week. Cached 24h per ISO week."""
+    y, w, _ = date.today().isocalendar()
+    cache_key = f"narrative:{current_user.id}:{y}-W{w}"
+    redis = await get_redis()
+
+    if not refresh:
+        try:
+            cached = await redis.get(cache_key)
+        except Exception:
+            cached = None
+        if cached:
+            payload = json.loads(cached)
+            return WeeklyNarrativeResponse(**payload, cached=True)
+
+    stats = await _gather_week_stats(db, current_user.id)
+    try:
+        narrative, highlights = await narrative_svc.narrate(stats)
+    except narrative_svc.NarrativeError as e:
+        title = "Service Unavailable" if e.status_code == status.HTTP_503_SERVICE_UNAVAILABLE else "Bad Gateway"
+        raise _problem(e.status_code, title, e.detail, request.url.path)
+
+    payload = {
+        "narrative": narrative,
+        "highlights": highlights,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        await redis.setex(cache_key, _NARRATIVE_TTL_SECONDS, json.dumps(payload))
+    except Exception:
+        pass  # cache is best-effort; a Redis outage must not fail generation
+
+    return WeeklyNarrativeResponse(**payload, cached=False)
