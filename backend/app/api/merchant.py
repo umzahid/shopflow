@@ -71,10 +71,12 @@ def _problem(status_code: int, title: str, detail: str, instance: str) -> HTTPEx
     )
 
 
-async def _revenue_since(db: AsyncSession, merchant_id: str, days: int) -> Decimal:
-    """Sum (qty * unit_price) for this merchant's items in revenue-status orders
-    placed in the last `days` days."""
-    cutoff = func.now() - timedelta(days=days)
+async def _revenue_between(
+    db: AsyncSession, merchant_id: str, start_days_ago: int, end_days_ago: int
+) -> Decimal:
+    """Recognized revenue for orders created in [now-start_days_ago, now-end_days_ago)."""
+    lower = func.now() - timedelta(days=start_days_ago)
+    upper = func.now() - timedelta(days=end_days_ago)
     stmt = (
         select(func.coalesce(func.sum(OrderItem.quantity * OrderItem.unit_price), 0))
         .join(Order, Order.id == OrderItem.order_id)
@@ -82,10 +84,70 @@ async def _revenue_since(db: AsyncSession, merchant_id: str, days: int) -> Decim
         .where(
             Product.merchant_id == merchant_id,
             Order.status.in_(REVENUE_STATUSES),
-            Order.created_at >= cutoff,
+            Order.created_at >= lower,
+            Order.created_at < upper,
         )
     )
     return Decimal((await db.execute(stmt)).scalar() or 0)
+
+
+async def _revenue_since(db: AsyncSession, merchant_id: str, days: int) -> Decimal:
+    return await _revenue_between(db, merchant_id, days, 0)
+
+
+async def _gather_week_stats(db: AsyncSession, merchant_id: str) -> dict:
+    """Week-over-week bundle fed to the narrative model. Merchant-scoped reads only."""
+    this_week = await _revenue_between(db, merchant_id, 7, 0)
+    prior_week = await _revenue_between(db, merchant_id, 14, 7)
+    delta_pct = (
+        round(float((this_week - prior_week) / prior_week) * 100, 1)
+        if prior_week != 0 else None
+    )
+
+    cutoff = func.now() - timedelta(days=7)
+    status_rows = (await db.execute(
+        select(Order.status, func.count(func.distinct(Order.id)))
+        .join(OrderItem, OrderItem.order_id == Order.id)
+        .join(Product, Product.id == OrderItem.product_id)
+        .where(Product.merchant_id == merchant_id, Order.created_at >= cutoff)
+        .group_by(Order.status)
+    )).all()
+    orders_by_status = {s.value: c for s, c in status_rows}
+
+    top_rows = (await db.execute(
+        select(
+            Product.title,
+            func.sum(OrderItem.quantity).label("units"),
+            func.sum(OrderItem.quantity * OrderItem.unit_price).label("rev"),
+        )
+        .join(OrderItem, OrderItem.product_id == Product.id)
+        .join(Order, Order.id == OrderItem.order_id)
+        .where(
+            Product.merchant_id == merchant_id,
+            Order.status.in_(REVENUE_STATUSES),
+            Order.created_at >= cutoff,
+        )
+        .group_by(Product.title)
+        .order_by(func.sum(OrderItem.quantity * OrderItem.unit_price).desc())
+        .limit(3)
+    )).all()
+    top_products = [
+        {"title": t, "units_sold": int(u), "revenue": str(Decimal(r))} for t, u, r in top_rows
+    ]
+
+    alerts = await get_restock_alerts(db, merchant_id)  # lead_time_days defaults to 7
+    # RestockAlert exposes .title and .current_stock (verified in app/services/restock.py:21-34)
+    restock_alerts = [{"title": a.title, "current_stock": a.current_stock} for a in alerts]
+
+    return {
+        "revenue_this_week": str(this_week),
+        "revenue_prior_week": str(prior_week),
+        "delta_pct": delta_pct,
+        "orders_this_week": sum(orders_by_status.values()),
+        "orders_by_status": orders_by_status,
+        "top_products": top_products,
+        "restock_alerts": restock_alerts,
+    }
 
 
 @router.get("/dashboard", response_model=MerchantDashboard)
