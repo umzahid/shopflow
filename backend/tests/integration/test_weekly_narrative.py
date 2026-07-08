@@ -50,7 +50,7 @@ async def test_requires_merchant_role(client):
 @pytest.mark.asyncio
 async def test_empty_store_returns_quiet_week(client):
     mtoken, _ = await register_merchant(client, "m-narr-empty@e.com")
-    nsvc.set_narrator(None)  # use SHOPFLOW_FAKE_NARRATIVE fake
+    nsvc.set_narrator(nsvc._fake_narrate)  # explicit fake — CI sets no env toggle
     res = await client.post("/api/v1/merchant/weekly-narrative", headers=bearer(mtoken))
     assert res.status_code == 200, res.text
     body = res.json()
@@ -61,7 +61,7 @@ async def test_empty_store_returns_quiet_week(client):
 @pytest.mark.asyncio
 async def test_cache_hit_then_refresh(client):
     mtoken, _ = await register_merchant(client, "m-narr-cache@e.com")
-    nsvc.set_narrator(None)
+    nsvc.set_narrator(nsvc._fake_narrate)
     first = await client.post("/api/v1/merchant/weekly-narrative", headers=bearer(mtoken))
     assert first.json()["cached"] is False
     second = await client.post("/api/v1/merchant/weekly-narrative", headers=bearer(mtoken))
