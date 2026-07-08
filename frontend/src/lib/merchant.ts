@@ -12,6 +12,7 @@ import type {
   DescriptionRequest,
   DescriptionResponse,
   MerchantDashboard,
+  MerchantReviews,
   Order,
   OrderStatus,
   PaginatedOrders,
@@ -63,6 +64,15 @@ export function useRestockAlerts(): UseQueryResult<RestockAlertsResponse, Error>
     queryKey: merchantKeys.restock(),
     queryFn: () => api<RestockAlertsResponse>("/merchant/restock-alerts"),
     staleTime: 60_000,
+  });
+}
+
+/** GET /merchant/reviews — recent reviews on this merchant's products. */
+export function useMerchantReviews(limit = 6): UseQueryResult<MerchantReviews, Error> {
+  return useQuery({
+    queryKey: [...merchantKeys.all, "reviews", limit],
+    queryFn: () => api<MerchantReviews>(`/merchant/reviews?limit=${limit}`),
+    staleTime: 30_000,
   });
 }
 

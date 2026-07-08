@@ -1,12 +1,13 @@
 "use client";
 
-import { AlertTriangle, TrendingUp } from "lucide-react";
+import { AlertTriangle, TrendingUp, Star } from "lucide-react";
 import Link from "next/link";
 
 import { BarChart, DonutChart, type Segment } from "@/components/ui/Charts";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 import {
   useMerchantDashboard,
+  useMerchantReviews,
   useRestockAlerts,
   useRevenueSummary,
 } from "@/lib/merchant";
@@ -38,6 +39,7 @@ export default function MerchantDashboardPage() {
   start.setDate(start.getDate() - 29);
   const revenue = useRevenueSummary(isoDate(start), isoDate(today));
   const restock = useRestockAlerts();
+  const reviews = useMerchantReviews();
 
   return (
     <div className="flex flex-col gap-8">
@@ -152,6 +154,40 @@ export default function MerchantDashboardPage() {
           )}
         </Card>
       </div>
+
+      {/* Recent reviews (PRD scenario 31 — merchant sees reviews in dashboard) */}
+      <Card title="Recent reviews" icon={<Star className="h-4 w-4 text-warning" />}>
+        <div data-testid="recent-reviews">
+          {reviews.isLoading ? (
+            <Skeleton variant="blank" className="h-32" />
+          ) : (reviews.data?.items.length ?? 0) === 0 ? (
+            <Empty>No reviews yet — they appear here as customers post them.</Empty>
+          ) : (
+            <ul className="flex flex-col divide-y divide-border">
+              {reviews.data!.items.map((r) => (
+                <li key={r.id} className="flex flex-col gap-1 py-2.5 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span
+                      aria-label={`${r.rating} out of 5 stars`}
+                      className="font-semibold text-warning"
+                    >
+                      {"★".repeat(r.rating)}
+                      <span className="text-border">{"★".repeat(5 - r.rating)}</span>
+                    </span>
+                    <span className="min-w-0 flex-1 truncate font-medium text-foreground">
+                      {r.product_title}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(r.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                  {r.body && <p className="text-muted-foreground">{r.body}</p>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </Card>
     </div>
   );
 }

@@ -26,6 +26,7 @@ from app.core.pagination import (
 )
 from app.models.models import (
     Order,
+    Review,
     OrderItem,
     OrderStatus,
     Product,
@@ -44,6 +45,8 @@ from app.schemas.dashboard import (
     ProductForecastResponse,
     RestockAlertResponse,
     RestockAlertsResponse,
+    MerchantReviewItem,
+    MerchantReviews,
     RevenueSummary,
     RevenueWindows,
     TopProduct,
@@ -390,6 +393,31 @@ async def restock_alerts(
         lead_time_days=lead_time,
         alerts=[RestockAlertResponse(**a.to_dict()) for a in alerts],
     )
+
+
+@router.get("/reviews", response_model=MerchantReviews)
+async def merchant_reviews(
+    request: Request,
+    limit: int = Query(default=10, ge=1, le=50),
+    current_user: User = Depends(require_role(UserRole.merchant)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Recent reviews on this merchant's products, newest first — feeds the
+    dashboard's recent-reviews widget (PRD §6.3 scenario 31)."""
+    rows = (await db.execute(
+        select(Review, Product.title)
+        .join(Product, Product.id == Review.product_id)
+        .where(Product.merchant_id == current_user.id, Product.deleted_at.is_(None))
+        .order_by(Review.created_at.desc(), Review.id.desc())
+        .limit(limit)
+    )).all()
+    return MerchantReviews(items=[
+        MerchantReviewItem(
+            id=r.id, product_id=r.product_id, product_title=title,
+            rating=r.rating, body=r.body, created_at=r.created_at,
+        )
+        for r, title in rows
+    ])
 
 
 @router.post("/copilot", response_model=CopilotResponse)

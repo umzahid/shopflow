@@ -290,3 +290,16 @@ export interface WeeklyNarrative {
   generated_at: string;
   cached: boolean;
 }
+
+export interface MerchantReviewItem {
+  id: string;
+  product_id: string;
+  product_title: string;
+  rating: number;
+  body: string | null;
+  created_at: string;
+}
+
+export interface MerchantReviews {
+  items: MerchantReviewItem[];
+}

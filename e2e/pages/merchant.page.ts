@@ -12,7 +12,8 @@ export class MerchantDashboardPage {
 
   constructor(readonly page: Page) {
     this.heading = page.getByRole("heading", { name: "Dashboard", level: 1 });
-    this.revenue30Card = page.getByText("Last 30 days");
+    // exact — the dashboard also has a "Revenue — last 30 days" chart heading
+    this.revenue30Card = page.getByText("Last 30 days", { exact: true });
     this.ordersByStatusHeading = page.getByRole("heading", { name: "Orders by status" });
   }
 

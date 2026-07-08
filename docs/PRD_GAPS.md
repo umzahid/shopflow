@@ -92,8 +92,8 @@
 - **Verify:** `npx vitest run src/app/merchant/products` green; manual check.
 - **Commit:** `feat(frontend): AI description generation in product edit flow`
 
-### GAP-06 · E2E scenario 31's merchant leg — Domain 6 (§6.3)
-- [ ] **What:** "login as merchant → see review in dashboard" — the review lifecycle
+### GAP-06 · E2E scenario 31's merchant leg — Domain 6 (§6.3) ✅ DONE 2026-07-09
+- [x] **What:** "login as merchant → see review in dashboard" — the review lifecycle
   spec stops at the review appearing on the product page; nothing drives the merchant
   view. (Note: merchant admin has no reviews page — decide: smallest honest close is
   asserting the review is visible wherever merchants see reviews; if nowhere, add a
