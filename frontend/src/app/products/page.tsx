@@ -39,6 +39,8 @@ import type { Product } from "@/types/api";
 
 const SORT_OPTIONS = [
   { label: "Newest", value: "newest" },
+  { label: "Price: low to high", value: "price_asc" },
+  { label: "Price: high to low", value: "price_desc" },
 ];
 
 interface ParsedFilters {
@@ -240,6 +242,10 @@ function PageBody({ parsed, onChange, onAddToCart }: BodyProps) {
               rating_min: parsed.ratingMin ? Number(parsed.ratingMin) : undefined,
               category_slug: parsed.category || undefined,
               page_size: 12,
+              sort:
+                parsed.sort === "price_asc" || parsed.sort === "price_desc"
+                  ? parsed.sort
+                  : undefined,
             }}
             onAddToCart={onAddToCart}
           />

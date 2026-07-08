@@ -23,6 +23,7 @@ export interface ProductListFilters {
   rating_min?: number;
   category_slug?: string;
   page_size?: number;
+  sort?: "price_asc" | "price_desc";
 }
 
 export const productKeys = {
@@ -44,6 +45,7 @@ function buildQuery(filters: ProductListFilters, cursor?: string): string {
   if (filters.price_max !== undefined) sp.set("price_max", String(filters.price_max));
   if (filters.rating_min !== undefined) sp.set("rating_min", String(filters.rating_min));
   if (filters.category_slug) sp.set("category_slug", filters.category_slug);
+  if (filters.sort) sp.set("sort", filters.sort);
   if (cursor) sp.set("cursor", cursor);
   const qs = sp.toString();
   return qs ? `?${qs}` : "";
