@@ -29,8 +29,8 @@
 
 ## P1 — graded deliverables at risk
 
-### GAP-01 · Run search eval, commit NDCG@3 result — Domain 5 (§5.2)
-- [ ] **What:** The PRD target "NDCG@3 ≥ 0.7" has never been demonstrated. The harness
+### GAP-01 · Run search eval, commit NDCG@3 result — Domain 5 (§5.2) ✅ DONE 2026-07-08
+- [x] **What:** The PRD target "NDCG@3 ≥ 0.7" has never been demonstrated. The harness
   and golden set exist; no results file is committed.
 - **Evidence:** `backend/app/scripts/eval_search.py`, `backend/app/eval/data/search_golden.json`;
   no committed results (grep "ndcg" hits only analysis docs).
