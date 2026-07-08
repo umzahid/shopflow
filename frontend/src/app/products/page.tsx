@@ -29,6 +29,7 @@ import { ProductCardSkeletonGrid } from "@/components/ui/SkeletonLoader";
 import { useToast } from "@/components/ui/Toast";
 import { ApiError } from "@/lib/api";
 import {
+  useCategories,
   useInfiniteProducts,
   useProductSearch,
   type ProductListFilters,
@@ -38,20 +39,33 @@ import type { Product } from "@/types/api";
 
 const SORT_OPTIONS = [
   { label: "Newest", value: "newest" },
+  { label: "Price: low to high", value: "price_asc" },
+  { label: "Price: high to low", value: "price_desc" },
 ];
 
 interface ParsedFilters {
   q: string;
   priceMin: string;
   priceMax: string;
+  category: string;
+  ratingMin: string;
   sort: string;
 }
+
+const RATING_OPTIONS = [
+  { label: "Any rating", value: "" },
+  { label: "4 stars & up", value: "4" },
+  { label: "3 stars & up", value: "3" },
+  { label: "2 stars & up", value: "2" },
+];
 
 function readParams(sp: URLSearchParams): ParsedFilters {
   return {
     q: sp.get("q") ?? "",
     priceMin: sp.get("price_min") ?? "",
     priceMax: sp.get("price_max") ?? "",
+    category: sp.get("category") ?? "",
+    ratingMin: sp.get("rating_min") ?? "",
     sort: sp.get("sort") ?? "newest",
   };
 }
@@ -61,6 +75,8 @@ function buildHref(p: ParsedFilters): string {
   if (p.q) sp.set("q", p.q);
   if (p.priceMin) sp.set("price_min", p.priceMin);
   if (p.priceMax) sp.set("price_max", p.priceMax);
+  if (p.category) sp.set("category", p.category);
+  if (p.ratingMin) sp.set("rating_min", p.ratingMin);
   if (p.sort && p.sort !== "newest") sp.set("sort", p.sort);
   const qs = sp.toString();
   return qs ? `/products?${qs}` : "/products";
@@ -223,7 +239,13 @@ function PageBody({ parsed, onChange, onAddToCart }: BodyProps) {
             filters={{
               price_min: parsed.priceMin ? Number(parsed.priceMin) : undefined,
               price_max: parsed.priceMax ? Number(parsed.priceMax) : undefined,
+              rating_min: parsed.ratingMin ? Number(parsed.ratingMin) : undefined,
+              category_slug: parsed.category || undefined,
               page_size: 12,
+              sort:
+                parsed.sort === "price_asc" || parsed.sort === "price_desc"
+                  ? parsed.sort
+                  : undefined,
             }}
             onAddToCart={onAddToCart}
           />
@@ -242,19 +264,40 @@ function FilterPanel({
   parsed: ParsedFilters;
   onChange: (next: ParsedFilters) => void;
 }) {
+  const categories = useCategories();
+
   // Local draft so the user can type without firing a URL change per keystroke.
   const [draft, setDraft] = useState({
     priceMin: parsed.priceMin,
     priceMax: parsed.priceMax,
+    category: parsed.category,
+    ratingMin: parsed.ratingMin,
   });
 
   useEffect(() => {
-    setDraft({ priceMin: parsed.priceMin, priceMax: parsed.priceMax });
-  }, [parsed.priceMin, parsed.priceMax]);
+    setDraft({
+      priceMin: parsed.priceMin,
+      priceMax: parsed.priceMax,
+      category: parsed.category,
+      ratingMin: parsed.ratingMin,
+    });
+  }, [parsed.priceMin, parsed.priceMax, parsed.category, parsed.ratingMin]);
 
   const apply = () => onChange({ ...parsed, ...draft });
   const reset = () =>
-    onChange({ q: parsed.q, priceMin: "", priceMax: "", sort: "newest" });
+    onChange({
+      q: parsed.q,
+      priceMin: "",
+      priceMax: "",
+      category: "",
+      ratingMin: "",
+      sort: "newest",
+    });
+
+  const categoryOptions = [
+    { label: "All categories", value: "" },
+    ...(categories.data ?? []).map((c) => ({ label: c.name, value: c.slug })),
+  ];
 
   return (
     <form
@@ -268,6 +311,32 @@ function FilterPanel({
         <FilterIcon className="h-4 w-4" aria-hidden="true" strokeWidth={2} />
         Filters
       </h2>
+
+      {categoryOptions.length > 1 && (
+        <fieldset className="flex flex-col gap-3">
+          <legend className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+            Category
+          </legend>
+          <Select
+            ariaLabel="Filter by category"
+            options={categoryOptions}
+            value={draft.category}
+            onChange={(e) => setDraft((d) => ({ ...d, category: e.target.value }))}
+          />
+        </fieldset>
+      )}
+
+      <fieldset className="flex flex-col gap-3">
+        <legend className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+          Rating
+        </legend>
+        <Select
+          ariaLabel="Filter by minimum rating"
+          options={RATING_OPTIONS}
+          value={draft.ratingMin}
+          onChange={(e) => setDraft((d) => ({ ...d, ratingMin: e.target.value }))}
+        />
+      </fieldset>
 
       <fieldset className="flex flex-col gap-3">
         <legend className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
@@ -323,6 +392,8 @@ function ActiveFilters({
   const chips: { label: string; key: keyof ParsedFilters }[] = [];
   if (parsed.priceMin) chips.push({ label: `Min $${parsed.priceMin}`, key: "priceMin" });
   if (parsed.priceMax) chips.push({ label: `Max $${parsed.priceMax}`, key: "priceMax" });
+  if (parsed.category) chips.push({ label: parsed.category, key: "category" });
+  if (parsed.ratingMin) chips.push({ label: `${parsed.ratingMin}★ & up`, key: "ratingMin" });
   if (parsed.q) chips.push({ label: `"${parsed.q}"`, key: "q" });
   if (chips.length === 0) return null;
   return (

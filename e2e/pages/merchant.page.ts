@@ -12,7 +12,8 @@ export class MerchantDashboardPage {
 
   constructor(readonly page: Page) {
     this.heading = page.getByRole("heading", { name: "Dashboard", level: 1 });
-    this.revenue30Card = page.getByText("Last 30 days");
+    // exact — the dashboard also has a "Revenue — last 30 days" chart heading
+    this.revenue30Card = page.getByText("Last 30 days", { exact: true });
     this.ordersByStatusHeading = page.getByRole("heading", { name: "Orders by status" });
   }
 
@@ -44,12 +45,23 @@ export class MerchantProductsPage {
 
 export class MerchantOrdersPage {
   readonly heading: Locator;
+  readonly fraudPanel: Locator;
 
   constructor(readonly page: Page) {
     this.heading = page.getByRole("heading", { name: "Orders", level: 1 });
+    this.fraudPanel = page.getByTestId("fraud-panel");
   }
 
   async goto() {
     await this.page.goto("/merchant/orders");
+  }
+
+  /** The table row for an order — the UI shows the first 8 chars of the id. */
+  row(orderId: string): Locator {
+    return this.page.getByRole("row").filter({ hasText: orderId.slice(0, 8) });
+  }
+
+  viewButton(orderId: string): Locator {
+    return this.row(orderId).getByRole("button", { name: "View" });
   }
 }

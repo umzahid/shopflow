@@ -30,6 +30,13 @@ export interface PaginatedProducts {
   next_cursor: string | null;
 }
 
+export interface Category {
+  id: string;
+  name: string;
+  slug: string;
+  parent_id: string | null;
+}
+
 export interface ProductSearchResult extends Product {
   relevance_score: number;
 }
@@ -79,6 +86,8 @@ export interface Order {
   created_at: string;
   updated_at: string;
   items: OrderItemResponse[];
+  fraud_score: string | null;
+  fraud_reasons: string[] | null;
 }
 
 export interface User {
@@ -273,4 +282,24 @@ export interface ProblemDetail {
   status: number;
   detail: string;
   instance: string;
+}
+
+export interface WeeklyNarrative {
+  narrative: string;
+  highlights: string[];
+  generated_at: string;
+  cached: boolean;
+}
+
+export interface MerchantReviewItem {
+  id: string;
+  product_id: string;
+  product_title: string;
+  rating: number;
+  body: string | null;
+  created_at: string;
+}
+
+export interface MerchantReviews {
+  items: MerchantReviewItem[];
 }

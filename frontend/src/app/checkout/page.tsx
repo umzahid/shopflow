@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ChevronRight, Lock, Tag } from "lucide-react";
+import { Check, ChevronRight, Lock, Tag } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
@@ -45,6 +45,51 @@ export default function CheckoutPage() {
         </AuthGuard>
       </main>
     </>
+  );
+}
+
+// PRD §2.2 multi-step checkout indicator. The journey is cart → address &
+// payment (this page) → confirmation (the order page after placement).
+const CHECKOUT_STEPS = ["Cart", "Address & payment", "Confirmation"] as const;
+const CURRENT_STEP = 1; // this page
+
+function CheckoutSteps() {
+  return (
+    <nav aria-label="Checkout progress" className="mb-8">
+      <ol className="flex items-center gap-2 text-sm">
+        {CHECKOUT_STEPS.map((label, i) => {
+          const done = i < CURRENT_STEP;
+          const current = i === CURRENT_STEP;
+          return (
+            <li key={label} className="flex items-center gap-2">
+              {i > 0 && (
+                <span aria-hidden="true" className="h-px w-6 bg-border sm:w-10" />
+              )}
+              <span
+                aria-current={current ? "step" : undefined}
+                className={cn(
+                  "inline-flex items-center gap-1.5 font-medium",
+                  current ? "text-foreground" : "text-muted-foreground",
+                )}
+              >
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold",
+                    done && "bg-primary text-primary-foreground",
+                    current && "bg-secondary text-secondary-foreground",
+                    !done && !current && "border border-border bg-surface text-muted-foreground",
+                  )}
+                >
+                  {done ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : i + 1}
+                </span>
+                <span className="hidden sm:inline">{label}</span>
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
   );
 }
 
@@ -176,9 +221,11 @@ function CheckoutContent() {
         </ol>
       </nav>
 
-      <h1 className="mb-8 font-heading text-3xl font-bold text-foreground sm:text-4xl">
+      <h1 className="mb-4 font-heading text-3xl font-bold text-foreground sm:text-4xl">
         Checkout
       </h1>
+
+      <CheckoutSteps />
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_22rem]">
         {/* ── Form ────────────────────────────────────────────────── */}

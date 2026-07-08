@@ -1,25 +1,32 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, LineChart as LineChartIcon, Pencil, Plus, Sparkles, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, LineChart as LineChartIcon, Pencil, Plus, Sparkles, X } from "lucide-react";
 import { useState } from "react";
 
+import dynamic from "next/dynamic";
+
 import { Button } from "@/components/ui/Button";
-import { ForecastChart } from "@/components/ui/Charts";
 import { Drawer } from "@/components/ui/Drawer";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 import { useToast } from "@/components/ui/Toast";
 import { ApiError, api } from "@/lib/api";
+import { DescriptionField } from "@/components/merchant/DescriptionField";
 import {
   merchantKeys,
-  useGenerateDescription,
   useMerchantProducts,
   useProductForecast,
   useUpdateProduct,
 } from "@/lib/merchant";
 import type { Product, ProductStatus } from "@/types/api";
+
+// Only rendered inside the forecast drawer — fetch the chart chunk on demand.
+const ForecastChart = dynamic(
+  () => import("@/components/ui/Charts").then((m) => m.ForecastChart),
+  { ssr: false },
+);
 
 const STATUS_FILTERS = [
   { label: "All statuses", value: "" },
@@ -34,12 +41,109 @@ const STATUS_BADGE: Record<ProductStatus, string> = {
   archived: "bg-danger/10 text-danger",
 };
 
+type SortKey = "title" | "price" | "stock";
+
+/** Column header with a sort toggle; aria-sort announces direction. */
+function SortableTh({
+  label,
+  active,
+  onSort,
+  align = "left",
+}: {
+  label: string;
+  active: "asc" | "desc" | null;
+  onSort: () => void;
+  align?: "left" | "right";
+}) {
+  const Icon = active === "asc" ? ArrowUp : active === "desc" ? ArrowDown : ArrowUpDown;
+  return (
+    <th
+      className={`px-4 py-3 ${align === "right" ? "text-right" : ""}`}
+      aria-sort={active === "asc" ? "ascending" : active === "desc" ? "descending" : undefined}
+    >
+      <button
+        type="button"
+        aria-label={`Sort by ${label.toLowerCase()}`}
+        onClick={onSort}
+        className={`inline-flex items-center gap-1 rounded uppercase tracking-wide hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+          active ? "text-foreground" : ""
+        }`}
+      >
+        {label}
+        <Icon className="h-3 w-3" aria-hidden="true" />
+      </button>
+    </th>
+  );
+}
+
+const SORT_VALUE: Record<SortKey, (p: Product) => string | number> = {
+  title: (p) => p.title.toLowerCase(),
+  price: (p) => Number(p.price),
+  stock: (p) => p.stock_qty,
+};
+
 export default function ProductManagerPage() {
+  const { toast } = useToast();
+  const update = useUpdateProduct();
   const [statusFilter, setStatusFilter] = useState<"" | ProductStatus>("");
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" } | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [forecast, setForecast] = useState<Product | null>(null);
+  const [editDetails, setEditDetails] = useState<Product | null>(null);
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
   const query = useMerchantProducts(statusFilter || undefined);
-  const products = query.data?.items ?? [];
+
+  // Search + sort are client-side over the loaded catalog; selection, count,
+  // and the table all operate on this visible set.
+  const q = search.trim().toLowerCase();
+  const filtered = (query.data?.items ?? []).filter(
+    (p) => !q || p.title.toLowerCase().includes(q),
+  );
+  const products = sort
+    ? [...filtered].sort((a, b) => {
+        const va = SORT_VALUE[sort.key](a);
+        const vb = SORT_VALUE[sort.key](b);
+        const cmp = va < vb ? -1 : va > vb ? 1 : 0;
+        return sort.dir === "asc" ? cmp : -cmp;
+      })
+    : filtered;
+
+  const toggleSort = (key: SortKey) =>
+    setSort((prev) =>
+      prev?.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" },
+    );
+
+  const allSelected = products.length > 0 && products.every((p) => selectedIds.has(p.id));
+
+  const toggleOne = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const toggleAll = () =>
+    setSelectedIds(allSelected ? new Set() : new Set(products.map((p) => p.id)));
+
+  // PRD §2.3 bulk actions — PATCH each selected product; report one summary toast.
+  const bulkSetStatus = async (next: ProductStatus) => {
+    const ids = Array.from(selectedIds);
+    const results = await Promise.allSettled(
+      ids.map((id) => update.mutateAsync({ id, patch: { status: next } })),
+    );
+    const failed = results.filter((r) => r.status === "rejected").length;
+    setSelectedIds(new Set());
+    toast(
+      failed === 0
+        ? { title: `${ids.length} product${ids.length === 1 ? "" : "s"} ${next}`, variant: "success" }
+        : {
+            title: `${ids.length - failed} updated, ${failed} failed`,
+            variant: "error",
+          },
+    );
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -62,7 +166,15 @@ export default function ProductManagerPage() {
         </Button>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          type="search"
+          aria-label="Search products"
+          placeholder="Search by title…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="h-11 w-full max-w-xs rounded-lg border border-border bg-surface px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
         <Select
           ariaLabel="Filter by status"
           options={STATUS_FILTERS}
@@ -74,6 +186,38 @@ export default function ProductManagerPage() {
           {query.isLoading ? "" : `${products.length} product${products.length === 1 ? "" : "s"}`}
         </span>
       </div>
+
+      {selectedIds.size > 0 && (
+        <div
+          data-testid="bulk-actions"
+          className="flex flex-wrap items-center gap-3 rounded-xl border border-secondary/40 bg-secondary/5 px-4 py-2.5"
+        >
+          <span className="text-sm font-semibold text-foreground" aria-live="polite">
+            {selectedIds.size} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={update.isPending}
+              onClick={() => bulkSetStatus("active")}
+            >
+              Activate
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              loading={update.isPending}
+              onClick={() => bulkSetStatus("archived")}
+            >
+              Archive
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
+              Clear
+            </Button>
+          </div>
+        </div>
+      )}
 
       {query.isLoading ? (
         <div className="flex flex-col gap-2">
@@ -95,16 +239,46 @@ export default function ProductManagerPage() {
           <table className="w-full min-w-[640px] text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                <th className="px-4 py-3">Product</th>
+                <th className="w-10 px-4 py-3">
+                  <input
+                    type="checkbox"
+                    aria-label={allSelected ? "Deselect all products" : "Select all products"}
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    className="h-4 w-4 cursor-pointer rounded border-border accent-secondary"
+                  />
+                </th>
+                <SortableTh
+                  label="Product"
+                  active={sort?.key === "title" ? sort.dir : null}
+                  onSort={() => toggleSort("title")}
+                />
                 <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-right">Price</th>
-                <th className="px-4 py-3 text-right">Stock</th>
+                <SortableTh
+                  label="Price"
+                  align="right"
+                  active={sort?.key === "price" ? sort.dir : null}
+                  onSort={() => toggleSort("price")}
+                />
+                <SortableTh
+                  label="Stock"
+                  align="right"
+                  active={sort?.key === "stock" ? sort.dir : null}
+                  onSort={() => toggleSort("stock")}
+                />
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {products.map((p) => (
-                <ProductRow key={p.id} product={p} onForecast={() => setForecast(p)} />
+                <ProductRow
+                  key={p.id}
+                  product={p}
+                  selected={selectedIds.has(p.id)}
+                  onToggleSelect={() => toggleOne(p.id)}
+                  onForecast={() => setForecast(p)}
+                  onEditDetails={() => setEditDetails(p)}
+                />
               ))}
             </tbody>
           </table>
@@ -117,6 +291,16 @@ export default function ProductManagerPage() {
         title="New product"
       >
         <CreateProductForm onDone={() => setCreateOpen(false)} />
+      </Drawer>
+
+      <Drawer
+        open={editDetails !== null}
+        onClose={() => setEditDetails(null)}
+        title={editDetails ? `Edit details — ${editDetails.title}` : "Edit details"}
+      >
+        {editDetails && (
+          <EditDetailsForm product={editDetails} onDone={() => setEditDetails(null)} />
+        )}
       </Drawer>
 
       <Drawer
@@ -151,7 +335,77 @@ function ForecastView({ productId }: { productId: string }) {
   );
 }
 
-function ProductRow({ product, onForecast }: { product: Product; onForecast: () => void }) {
+/** Title + AI-assisted description editing for an existing product (PRD §5.6 task 27). */
+function EditDetailsForm({
+  product,
+  onDone,
+}: {
+  product: Product;
+  onDone: () => void;
+}) {
+  const { toast } = useToast();
+  const update = useUpdateProduct();
+  const [title, setTitle] = useState(product.title);
+  const [description, setDescription] = useState(product.description ?? "");
+
+  const save = () => {
+    update.mutate(
+      { id: product.id, patch: { title: title.trim(), description: description.trim() } },
+      {
+        onSuccess: () => {
+          toast({ title: "Details saved", description: title, variant: "success" });
+          onDone();
+        },
+        onError: (e) =>
+          toast({
+            title: "Update failed",
+            description: e instanceof ApiError ? e.problem.detail : e.message,
+            variant: "error",
+          }),
+      },
+    );
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Input
+        label="Title"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        required
+      />
+      <DescriptionField
+        id={`edit-desc-${product.id}`}
+        title={title}
+        value={description}
+        onChange={setDescription}
+      />
+      <Button
+        variant="primary"
+        loading={update.isPending}
+        disabled={!title.trim()}
+        onClick={save}
+        className="self-end"
+      >
+        Save details
+      </Button>
+    </div>
+  );
+}
+
+function ProductRow({
+  product,
+  selected,
+  onToggleSelect,
+  onForecast,
+  onEditDetails,
+}: {
+  product: Product;
+  selected: boolean;
+  onToggleSelect: () => void;
+  onForecast: () => void;
+  onEditDetails: () => void;
+}) {
   const { toast } = useToast();
   const update = useUpdateProduct();
   const [editing, setEditing] = useState(false);
@@ -194,6 +448,15 @@ function ProductRow({ product, onForecast }: { product: Product; onForecast: () 
 
   return (
     <tr className="text-foreground">
+      <td className="w-10 px-4 py-3">
+        <input
+          type="checkbox"
+          aria-label={`Select ${product.title}`}
+          checked={selected}
+          onChange={onToggleSelect}
+          className="h-4 w-4 cursor-pointer rounded border-border accent-secondary"
+        />
+      </td>
       <td className="max-w-[16rem] truncate px-4 py-3 font-medium">{product.title}</td>
       <td className="px-4 py-3">
         <span
@@ -271,6 +534,14 @@ function ProductRow({ product, onForecast }: { product: Product; onForecast: () 
               <Button
                 size="sm"
                 variant="ghost"
+                leftIcon={<Sparkles className="h-4 w-4" aria-hidden="true" />}
+                onClick={onEditDetails}
+              >
+                Details
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
                 leftIcon={<LineChartIcon className="h-4 w-4" aria-hidden="true" />}
                 onClick={onForecast}
               >
@@ -306,34 +577,13 @@ function ProductRow({ product, onForecast }: { product: Product; onForecast: () 
 function CreateProductForm({ onDone }: { onDone: () => void }) {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const generate = useGenerateDescription();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [stock, setStock] = useState("");
-  const [variants, setVariants] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   const canSubmit = title.trim() && price !== "" && stock !== "";
-
-  const onGenerate = () => {
-    if (!title.trim()) {
-      toast({ title: "Add a title first", variant: "warning" });
-      return;
-    }
-    generate.mutate(
-      { title, length: "medium", tone: "professional" },
-      {
-        onSuccess: (r) => setVariants(r.variants),
-        onError: (e) =>
-          toast({
-            title: "Couldn't generate",
-            description: e instanceof ApiError ? e.problem.detail : e.message,
-            variant: "error",
-          }),
-      },
-    );
-  };
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -374,48 +624,12 @@ function CreateProductForm({ onDone }: { onDone: () => void }) {
         required
       />
 
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between">
-          <label htmlFor="new-desc" className="text-sm font-semibold text-foreground">
-            Description
-          </label>
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            loading={generate.isPending}
-            leftIcon={<Sparkles className="h-4 w-4" aria-hidden="true" />}
-            onClick={onGenerate}
-          >
-            Generate with AI
-          </Button>
-        </div>
-        <textarea
-          id="new-desc"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          rows={4}
-          placeholder="Describe your product, or generate a draft with AI."
-          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/20"
-        />
-        {variants.length > 0 && (
-          <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/40 p-3">
-            <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-              AI suggestions — click to use
-            </p>
-            {variants.map((v, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => setDescription(v)}
-                className="rounded-md border border-border bg-surface p-2 text-left text-sm text-foreground transition-colors hover:border-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {v}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      <DescriptionField
+        id="new-desc"
+        title={title}
+        value={description}
+        onChange={setDescription}
+      />
 
       <div className="grid grid-cols-2 gap-3">
         <Input

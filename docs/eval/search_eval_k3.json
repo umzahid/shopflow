@@ -1,0 +1,18 @@
+{
+  "k": 3,
+  "query_count": 11,
+  "modes": {
+    "lexical": {
+      "ndcg@k": 0.8597,
+      "recall@k": 0.803
+    },
+    "semantic": {
+      "ndcg@k": 0.8576,
+      "recall@k": 0.8333
+    },
+    "hybrid": {
+      "ndcg@k": 0.8576,
+      "recall@k": 0.8333
+    }
+  }
+}

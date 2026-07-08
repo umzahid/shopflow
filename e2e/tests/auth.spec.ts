@@ -84,7 +84,10 @@ test.describe("Authentication", () => {
 
     await test.step("Stays on /register with an announced error", async () => {
       await expect(page).toHaveURL(/\/register/);
-      await expect(page.getByRole("alert")).toBeVisible();
+      // filter: Next's route announcer also carries role=alert after soft navs
+      await expect(
+        page.getByRole("alert").filter({ hasText: /already registered/i }),
+      ).toBeVisible();
     });
   });
 

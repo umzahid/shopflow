@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from sqlalchemy import delete, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.products import _hybrid_search, _lexical_search, _semantic_search
@@ -42,7 +42,14 @@ async def seed_search_corpus(db: AsyncSession, corpus: list[dict]) -> str:
         await db.execute(select(User).where(User.email == _SEED_MERCHANT_EMAIL))
     ).scalar_one_or_none()
     if merchant is not None:
-        await db.execute(delete(Product).where(Product.merchant_id == merchant.id))
+        # Soft-delete the previous corpus (project convention — and prior eval
+        # products may be referenced by order_items, so hard DELETE would 500).
+        # Search filters deleted_at IS NULL, so stale rows can't pollute results.
+        await db.execute(
+            update(Product)
+            .where(Product.merchant_id == merchant.id, Product.deleted_at.is_(None))
+            .values(deleted_at=func.now())
+        )
     else:
         merchant = User(
             email=_SEED_MERCHANT_EMAIL,

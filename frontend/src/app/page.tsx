@@ -6,8 +6,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { Header } from "@/components/Header";
-import { MerchantCTA } from "@/components/MerchantCTA";
 import { PopularTags } from "@/components/PopularTags";
+import { RecentlyViewed } from "@/components/RecentlyViewed";
 import { SearchBar } from "@/components/SearchBar";
 import { TrustStrip } from "@/components/TrustStrip";
 import { Button } from "@/components/ui/Button";
@@ -65,7 +65,6 @@ export default function Home() {
               fill
               priority
               sizes="100vw"
-              quality={90}
               className="object-cover animate-kenburns"
             />
             {/* Dark scrim: opaque at top-left where the headline sits,
@@ -241,14 +240,12 @@ export default function Home() {
           )}
         </section>
 
-        {/* ── Trust strip ────────────────────────────────────────────── */}
-        <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
-          <TrustStrip />
-        </section>
+        {/* ── Recently viewed (localStorage, renders only with history) ─ */}
+        <RecentlyViewed />
 
-        {/* ── Become-a-merchant CTA ──────────────────────────────────── */}
+        {/* ── Trust strip ────────────────────────────────────────────── */}
         <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 sm:pb-24 lg:px-8">
-          <MerchantCTA />
+          <TrustStrip />
         </section>
       </main>
 

@@ -17,7 +17,7 @@ from app.core.pagination import (
     encode_cursor,
     resolve_page_size,
 )
-from app.models.models import Category, Product, ProductStatus, User, UserRole
+from app.models.models import Category, Product, ProductStatus, Review, User, UserRole
 from app.schemas.product import (
     PaginatedProducts,
     ProductCreate,
@@ -47,6 +47,30 @@ def _problem(status_code: int, title: str, detail: str, instance: str) -> HTTPEx
 
 def _cursor_for(product: Product) -> str:
     return encode_cursor(product.created_at, product.id)
+
+
+# Price-sorted listing uses its own cursor scheme (price|id) — the shared
+# pagination helper is hard-wired to (created_at, id) and every other list
+# endpoint depends on it, so it stays untouched.
+def _encode_price_cursor(price: Decimal, id_: str) -> str:
+    import base64
+
+    return base64.urlsafe_b64encode(f"{price}|{id_}".encode()).decode().rstrip("=")
+
+
+def _decode_price_cursor(cursor: str, request: Request) -> tuple[Decimal, str]:
+    import base64
+    import binascii
+
+    try:
+        padding = "=" * (-len(cursor) % 4)
+        price_str, id_ = base64.urlsafe_b64decode(cursor + padding).decode().split("|", 1)
+        return Decimal(price_str), id_
+    except (ValueError, ArithmeticError, binascii.Error, UnicodeDecodeError):
+        raise _problem(
+            status.HTTP_400_BAD_REQUEST, "Bad Request",
+            "Invalid pagination cursor", request.url.path,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -175,7 +199,9 @@ async def list_products(
     category_slug: str | None = Query(default=None),
     price_min: Decimal | None = Query(default=None, ge=0),
     price_max: Decimal | None = Query(default=None, ge=0),
+    rating_min: float | None = Query(default=None, ge=1, le=5),
     merchant_id: UUID | None = Query(default=None),
+    sort: Literal["newest", "price_asc", "price_desc"] = Query(default="newest"),
     db: AsyncSession = Depends(get_db),
 ):
     page_size = resolve_page_size(page_size)
@@ -193,12 +219,47 @@ async def list_products(
         stmt = stmt.where(Product.price >= price_min)
     if price_max is not None:
         stmt = stmt.where(Product.price <= price_max)
+    if rating_min is not None:
+        # NULL averages (no reviews) never satisfy >=, so unrated products are
+        # excluded once a rating floor is set — matches marketplace convention.
+        avg_rating = (
+            select(func.avg(Review.rating))
+            .where(Review.product_id == Product.id)
+            .correlate(Product)
+            .scalar_subquery()
+        )
+        stmt = stmt.where(avg_rating >= rating_min)
     if merchant_id is not None:
         stmt = stmt.where(Product.merchant_id == str(merchant_id))
 
-    stmt = apply_cursor(stmt, Product.created_at, Product.id, cursor, page_size)
-    rows = (await db.execute(stmt)).scalars().all()
-    items, next_cursor = build_page(rows, page_size, _cursor_for)
+    if sort == "newest":
+        stmt = apply_cursor(stmt, Product.created_at, Product.id, cursor, page_size)
+        rows = (await db.execute(stmt)).scalars().all()
+        items, next_cursor = build_page(rows, page_size, _cursor_for)
+    else:
+        # Price sort: cursor encodes (price, id); id breaks ties on equal prices.
+        from sqlalchemy import literal, tuple_
+
+        if cursor:
+            c_price, c_id = _decode_price_cursor(cursor, request)
+            key = tuple_(Product.price, Product.id)
+            # Explicit bind types: id is a native uuid column holding str values —
+            # untyped binds go over the wire as varchar and PG has no uuid>varchar.
+            after = tuple_(
+                literal(c_price, Product.price.type), literal(c_id, Product.id.type)
+            )
+            stmt = stmt.where(key > after if sort == "price_asc" else key < after)
+        order = (
+            (Product.price.asc(), Product.id.asc())
+            if sort == "price_asc"
+            else (Product.price.desc(), Product.id.desc())
+        )
+        stmt = stmt.order_by(*order).limit(page_size + 1)
+        rows = (await db.execute(stmt)).scalars().all()
+        items, next_cursor = build_page(
+            rows, page_size, lambda p: _encode_price_cursor(p.price, p.id)
+        )
+
     return PaginatedProducts(
         items=[ProductResponse.model_validate(p) for p in items],
         next_cursor=next_cursor,

@@ -102,7 +102,15 @@ async def _anthropic_turn(messages, tools):  # pragma: no cover - needs anthropi
         return await client.messages.create(
             model=settings.COPILOT_MODEL,
             max_tokens=2048,
-            system=SYSTEM_PROMPT,
+            # cache_control on the last system block caches the tools + system
+            # prefix across the loop's iterations (tools render before system).
+            # Opus-tier models only cache prefixes >= 4096 tokens, so this is a
+            # no-op until the prefix grows past that — harmless either way.
+            system=[{
+                "type": "text",
+                "text": SYSTEM_PROMPT,
+                "cache_control": {"type": "ephemeral"},
+            }],
             tools=tools,
             tool_choice={"type": "auto"},
             thinking={"type": "adaptive"},

@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, Field
@@ -77,3 +77,16 @@ class RestockAlertResponse(BaseModel):
 class RestockAlertsResponse(BaseModel):
     lead_time_days: int
     alerts: list[RestockAlertResponse]
+
+
+class MerchantReviewItem(BaseModel):
+    id: str
+    product_id: str
+    product_title: str
+    rating: int
+    body: str | None
+    created_at: datetime
+
+
+class MerchantReviews(BaseModel):
+    items: list[MerchantReviewItem]

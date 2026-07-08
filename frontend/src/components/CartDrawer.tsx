@@ -1,6 +1,7 @@
 "use client";
 
 import { Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 
 import { Drawer } from "@/components/ui/Drawer";
@@ -68,14 +69,15 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
               <li key={line.productId} className="flex gap-3 py-4">
                 <div
                   aria-hidden="true"
-                  className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted"
+                  className="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted"
                 >
                   {line.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
+                    <Image
                       src={line.imageUrl}
                       alt=""
-                      className="h-full w-full object-cover"
+                      fill
+                      sizes="64px"
+                      className="object-cover"
                     />
                   ) : (
                     <ShoppingBag

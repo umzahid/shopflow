@@ -58,3 +58,12 @@ class ProductSummaryResponse(BaseModel):
 class PaginatedProducts(BaseModel):
     items: list[ProductResponse]
     next_cursor: str | None = None
+
+
+class CategoryResponse(BaseModel):
+    id: str
+    name: str
+    slug: str
+    parent_id: str | None = None
+
+    model_config = {"from_attributes": True}

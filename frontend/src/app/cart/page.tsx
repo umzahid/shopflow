@@ -10,6 +10,7 @@ import {
   Tag,
   Trash2,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -120,14 +121,15 @@ export default function CartPage() {
                       <Link
                         href={`/products/${line.productId}`}
                         aria-label={`View ${line.title}`}
-                        className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface sm:h-28 sm:w-28"
+                        className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface sm:h-28 sm:w-28"
                       >
                         {line.imageUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
+                          <Image
                             src={line.imageUrl}
                             alt=""
-                            className="h-full w-full object-cover"
+                            fill
+                            sizes="112px"
+                            className="object-cover"
                           />
                         ) : (
                           <ImageOff

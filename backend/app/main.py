@@ -12,7 +12,18 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from app.api import admin, auth, cart, merchant, orders, products, reviews, users, webhooks
+from app.api import (
+    admin,
+    auth,
+    cart,
+    categories,
+    merchant,
+    orders,
+    products,
+    reviews,
+    users,
+    webhooks,
+)
 from app.core.config import settings
 from app.core.database import engine
 from app.core.logging import configure_logging, trace_id_var
@@ -209,6 +220,7 @@ Instrumentator().instrument(app).expose(app, endpoint="/metrics", tags=["health"
 # Routers
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(products.router, prefix="/api/v1")
+app.include_router(categories.router, prefix="/api/v1")
 app.include_router(cart.router, prefix="/api/v1")
 app.include_router(orders.router, prefix="/api/v1")
 app.include_router(reviews.router, prefix="/api/v1")

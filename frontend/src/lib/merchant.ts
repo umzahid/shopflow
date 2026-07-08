@@ -12,6 +12,7 @@ import type {
   DescriptionRequest,
   DescriptionResponse,
   MerchantDashboard,
+  MerchantReviews,
   Order,
   OrderStatus,
   PaginatedOrders,
@@ -21,6 +22,7 @@ import type {
   ProductStatus,
   RestockAlertsResponse,
   RevenueSummary,
+  WeeklyNarrative,
 } from "@/types/api";
 
 export const merchantKeys = {
@@ -65,6 +67,15 @@ export function useRestockAlerts(): UseQueryResult<RestockAlertsResponse, Error>
   });
 }
 
+/** GET /merchant/reviews — recent reviews on this merchant's products. */
+export function useMerchantReviews(limit = 6): UseQueryResult<MerchantReviews, Error> {
+  return useQuery({
+    queryKey: [...merchantKeys.all, "reviews", limit],
+    queryFn: () => api<MerchantReviews>(`/merchant/reviews?limit=${limit}`),
+    staleTime: 30_000,
+  });
+}
+
 export function useMerchantProducts(
   status?: ProductStatus,
 ): UseQueryResult<PaginatedProducts, Error> {
@@ -88,6 +99,8 @@ export function useMerchantOrders(
 }
 
 interface ProductPatch {
+  title?: string;
+  description?: string;
   price?: number;
   stock_qty?: number;
   status?: ProductStatus;
@@ -148,6 +161,21 @@ export function useCopilot(): UseMutationResult<CopilotResponse, Error, string> 
         method: "POST",
         body: { question },
       }),
+  });
+}
+
+/** POST /merchant/weekly-narrative — AI week-in-review. refresh bypasses the 24h cache. */
+export function useWeeklyNarrative(): UseMutationResult<
+  WeeklyNarrative,
+  Error,
+  { refresh?: boolean } | void
+> {
+  return useMutation({
+    mutationFn: (vars) =>
+      api<WeeklyNarrative>(
+        `/merchant/weekly-narrative${vars && vars.refresh ? "?refresh=true" : ""}`,
+        { method: "POST" },
+      ),
   });
 }
 

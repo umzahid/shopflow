@@ -112,6 +112,112 @@ export function DonutChart({
   );
 }
 
+export interface GeoDatum {
+  label: string;
+  value: number;
+  col: number;
+  row: number;
+}
+
+/**
+ * Tile-grid geographic heat map: one tile per region on a coarse grid, shaded
+ * by order volume. Like DonutChart, the tiles carry no text — the labelled
+ * summary list below is the accessible key. Each tile also has a native SVG
+ * <title> for hover. Opacity is set via attr (not a Tailwind class) so the JIT
+ * never sees a dynamic value.
+ */
+export function GeoHeatMap({
+  regions,
+  color = "#7c3aed", // brand secondary
+}: {
+  regions: GeoDatum[];
+  color?: string;
+}) {
+  if (regions.length === 0) {
+    return (
+      <p className="py-8 text-center text-sm text-muted-foreground">
+        No regional order data yet.
+      </p>
+    );
+  }
+
+  const TILE = 64;
+  const GAP = 8;
+  const cols = Math.max(...regions.map((r) => r.col)) + 1;
+  const rows = Math.max(...regions.map((r) => r.row)) + 1;
+  const max = Math.max(1, ...regions.map((r) => r.value));
+  const W = cols * TILE + (cols - 1) * GAP;
+  const H = rows * TILE + (rows - 1) * GAP;
+
+  const opacityFor = (v: number) => (v === 0 ? 0 : 0.15 + 0.85 * (v / max));
+  const ranked = [...regions].sort((a, b) => b.value - a.value);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        width="100%"
+        role="img"
+        aria-label="Orders by region heat map"
+        style={{ maxWidth: W }}
+      >
+        {regions.map((r) => {
+          const x = r.col * (TILE + GAP);
+          const y = r.row * (TILE + GAP);
+          return (
+            <g key={r.label}>
+              <title>{`${r.label}: ${r.value}`}</title>
+              {/* muted base keeps zero/low-volume tiles visible */}
+              <rect x={x} y={y} width={TILE} height={TILE} rx={8} className="fill-muted" />
+              <rect
+                x={x}
+                y={y}
+                width={TILE}
+                height={TILE}
+                rx={8}
+                data-region={r.label}
+                fill={color}
+                fillOpacity={opacityFor(r.value)}
+              />
+            </g>
+          );
+        })}
+      </svg>
+
+      {/* intensity legend */}
+      <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+        <span>fewer</span>
+        {[0.15, 0.36, 0.57, 0.78, 1].map((o) => (
+          <span
+            key={o}
+            aria-hidden="true"
+            className="inline-block h-3 w-5 rounded-sm"
+            style={{ backgroundColor: color, opacity: o }}
+          />
+        ))}
+        <span>more</span>
+      </div>
+
+      {/* labelled summary — the accessible key, ranked by volume */}
+      <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-sm">
+        {ranked.map((r) => (
+          <li key={r.label} className="flex items-center gap-1.5">
+            <span
+              aria-hidden="true"
+              className="inline-block h-3 w-3 rounded-sm"
+              style={{ backgroundColor: color, opacity: opacityFor(r.value) || 0.15 }}
+            />
+            <span className="text-foreground">{r.label}</span>
+            <span className="font-semibold tabular-nums text-muted-foreground">
+              {r.value}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export interface ForecastDatum {
   ds: string;
   yhat: number;

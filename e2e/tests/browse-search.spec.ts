@@ -67,7 +67,13 @@ test.describe("Browse & search", () => {
     const products = new ProductsPage(page);
 
     await test.step("Search for a nonsense term", async () => {
-      await products.goto(`zzz-no-such-thing-${Date.now()}`);
+      // Letters only — a numeric suffix (e.g. Date.now()) embeds "close
+      // enough" to seeded titles that also carry timestamp tokens, so the
+      // semantic leg can return matches for what was meant to be nonsense.
+      const suffix = Array.from({ length: 8 }, () =>
+        String.fromCharCode(97 + Math.floor(Math.random() * 26)),
+      ).join("");
+      await products.goto(`zzz-no-such-thing-${suffix}`);
     });
 
     await test.step("The no-results message is shown", async () => {

@@ -1,12 +1,35 @@
 """Product endpoints integration."""
 import pytest
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from app.core.config import settings
+from app.models.models import Category
 
 from tests.integration.helpers import (
+    add_to_cart,
+    advance_order_to_delivered,
     bearer,
+    checkout,
     create_product,
     register_customer,
     register_merchant,
 )
+
+TEST_DB_URL = settings.DATABASE_URL.rsplit("/", 1)[0] + "/shopflow_test"
+
+
+async def _seed_category(name: str, slug: str) -> str:
+    """Categories have no write API — seed directly like other DB-only fixtures."""
+    engine = create_async_engine(TEST_DB_URL)
+    Session = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with Session() as db:
+            cat = Category(name=name, slug=slug)
+            db.add(cat)
+            await db.commit()
+            return cat.id
+    finally:
+        await engine.dispose()
 
 
 @pytest.mark.asyncio
@@ -122,3 +145,57 @@ async def test_price_filter(client):
 async def test_list_rejects_bad_cursor(client):
     res = await client.get("/api/v1/products?cursor=!!!not-a-cursor!!!")
     assert res.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_categories_endpoint_lists_sorted(client):
+    assert (await client.get("/api/v1/categories")).json() == []
+    await _seed_category("Pottery", "pottery")
+    await _seed_category("Apparel", "apparel")
+    res = await client.get("/api/v1/categories")
+    assert res.status_code == 200
+    assert [c["slug"] for c in res.json()] == ["apparel", "pottery"]
+
+
+@pytest.mark.asyncio
+async def test_category_slug_filter(client):
+    cat_id = await _seed_category("Pottery", "pottery")
+    token, _ = await register_merchant(client, "mcat@e.com")
+    p = await create_product(client, token, title="Vase")
+    await create_product(client, token, title="Socks")
+    res = await client.patch(
+        f"/api/v1/products/{p['id']}",
+        json={"category_id": cat_id},
+        headers=bearer(token),
+    )
+    assert res.status_code == 200
+    res = await client.get("/api/v1/products?category_slug=pottery")
+    assert [i["title"] for i in res.json()["items"]] == ["Vase"]
+
+
+@pytest.mark.asyncio
+async def test_rating_min_filter(client):
+    mt, _ = await register_merchant(client, "mrate@e.com")
+    good = await create_product(client, mt, title="Good")
+    bad = await create_product(client, mt, title="Bad")
+    await create_product(client, mt, title="Unrated")
+
+    ct, _ = await register_customer(client, "crate@e.com")
+    for product, rating in ((good, 5), (bad, 2)):
+        await add_to_cart(client, ct, product["id"])
+        order = (await checkout(client, ct)).json()
+        await advance_order_to_delivered(client, mt, order["id"])
+        res = await client.post(
+            f"/api/v1/products/{product['id']}/reviews",
+            json={"rating": rating, "body": "review"},
+            headers=bearer(ct),
+        )
+        assert res.status_code == 201, res.text
+
+    res = await client.get("/api/v1/products?rating_min=4")
+    assert res.status_code == 200
+    # Low-rated and never-reviewed products are both excluded by the floor.
+    assert [i["title"] for i in res.json()["items"]] == ["Good"]
+
+    all_titles = {i["title"] for i in (await client.get("/api/v1/products")).json()["items"]}
+    assert all_titles == {"Good", "Bad", "Unrated"}

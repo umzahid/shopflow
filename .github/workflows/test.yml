@@ -349,17 +349,15 @@ jobs:
           config: p/ci
         continue-on-error: true
 
-      # Secrets scan — flags committed credentials. Test fixtures / CI env carry
-      # obvious dummy tokens, so this is report-only; a real leak shows in the log.
-      - name: detect-secrets
+      # Secrets scan — HARD GATE (PRD §3.2 stage 4: fail on any secret).
+      # Known dummy fixtures are allowlisted in the audited .secrets.baseline;
+      # the hook fails only on findings NOT in the baseline. To accept a new
+      # legitimate fixture: regenerate the baseline with the same excludes,
+      # audit the diff, and commit it.
+      - name: detect-secrets (gate)
         run: |
           pip install detect-secrets
-          detect-secrets scan \
-            --exclude-files '\.github/workflows/.*' \
-            --exclude-files '.*/tests/.*' \
-            --exclude-files 'frontend/package-lock\.json' \
-            | tee detect-secrets-report.json
-        continue-on-error: true
+          git ls-files -z | xargs -0 detect-secrets-hook --baseline .secrets.baseline
 
   # ── 9. Build & Push (main only) ────────────────────────────────────────────
   build-push:

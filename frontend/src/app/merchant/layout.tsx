@@ -1,13 +1,20 @@
 "use client";
 
 import { BarChart3, LayoutDashboard, Package, ShoppingCart } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 
 import { Header } from "@/components/Header";
-import { MerchantCopilot } from "@/components/MerchantCopilot";
 import { useAuth } from "@/store/auth";
+
+// Chat panel is interaction-only — load it as its own chunk after hydration
+// instead of blocking every merchant page's first paint.
+const MerchantCopilot = dynamic(
+  () => import("@/components/MerchantCopilot").then((m) => m.MerchantCopilot),
+  { ssr: false },
+);
 
 const NAV = [
   { href: "/merchant", label: "Dashboard", icon: LayoutDashboard, exact: true },
