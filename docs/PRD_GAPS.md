@@ -103,8 +103,8 @@
   content is visible; suite green (`cd e2e && npx playwright test`).
 - **Commit:** `test(e2e): scenario 31 merchant leg — review visible to merchant`
 
-### GAP-07 · Make detect-secrets a CI gate — Domain 3/6 (§3.2 stage 4)
-- [ ] **What:** PRD: build fails if "any secret detected". Currently
+### GAP-07 · Make detect-secrets a CI gate — Domain 3/6 (§3.2 stage 4) ✅ DONE 2026-07-09
+- [x] **What:** PRD: build fails if "any secret detected". Currently
   `continue-on-error: true` (report-only) in `.github/workflows/test.yml` (~line 362).
 - **How:** Create a `.secrets.baseline` allowlisting the known test fixtures
   (`detect-secrets scan > .secrets.baseline`, audit it), switch the step to fail on
