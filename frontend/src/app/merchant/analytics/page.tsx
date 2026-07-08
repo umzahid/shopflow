@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { WeeklyNarrativeCard } from "@/components/merchant/WeeklyNarrativeCard";
 import { BarChart } from "@/components/ui/Charts";
 import { Select } from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
@@ -54,6 +55,7 @@ export default function AnalyticsPage() {
 
   return (
     <div className="flex flex-col gap-8">
+      <WeeklyNarrativeCard />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-heading text-2xl font-bold text-foreground sm:text-3xl">
@@ -121,10 +123,6 @@ export default function AnalyticsPage() {
         )}
       </section>
 
-      <p className="text-xs text-muted-foreground">
-        Geographic order heat map is not yet available — order records don&apos;t
-        currently capture buyer geo. Tracked as future work.
-      </p>
     </div>
   );
 }

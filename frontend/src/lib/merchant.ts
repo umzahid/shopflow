@@ -21,6 +21,7 @@ import type {
   ProductStatus,
   RestockAlertsResponse,
   RevenueSummary,
+  WeeklyNarrative,
 } from "@/types/api";
 
 export const merchantKeys = {
@@ -148,6 +149,21 @@ export function useCopilot(): UseMutationResult<CopilotResponse, Error, string> 
         method: "POST",
         body: { question },
       }),
+  });
+}
+
+/** POST /merchant/weekly-narrative — AI week-in-review. refresh bypasses the 24h cache. */
+export function useWeeklyNarrative(): UseMutationResult<
+  WeeklyNarrative,
+  Error,
+  { refresh?: boolean } | void
+> {
+  return useMutation({
+    mutationFn: (vars) =>
+      api<WeeklyNarrative>(
+        `/merchant/weekly-narrative${vars && vars.refresh ? "?refresh=true" : ""}`,
+        { method: "POST" },
+      ),
   });
 }
 

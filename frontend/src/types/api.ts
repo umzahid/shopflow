@@ -283,3 +283,10 @@ export interface ProblemDetail {
   detail: string;
   instance: string;
 }
+
+export interface WeeklyNarrative {
+  narrative: string;
+  highlights: string[];
+  generated_at: string;
+  cached: boolean;
+}
