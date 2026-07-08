@@ -13,9 +13,9 @@ import { Select } from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 import { useToast } from "@/components/ui/Toast";
 import { ApiError, api } from "@/lib/api";
+import { DescriptionField } from "@/components/merchant/DescriptionField";
 import {
   merchantKeys,
-  useGenerateDescription,
   useMerchantProducts,
   useProductForecast,
   useUpdateProduct,
@@ -90,6 +90,7 @@ export default function ProductManagerPage() {
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" } | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [forecast, setForecast] = useState<Product | null>(null);
+  const [editDetails, setEditDetails] = useState<Product | null>(null);
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
   const query = useMerchantProducts(statusFilter || undefined);
 
@@ -276,6 +277,7 @@ export default function ProductManagerPage() {
                   selected={selectedIds.has(p.id)}
                   onToggleSelect={() => toggleOne(p.id)}
                   onForecast={() => setForecast(p)}
+                  onEditDetails={() => setEditDetails(p)}
                 />
               ))}
             </tbody>
@@ -289,6 +291,16 @@ export default function ProductManagerPage() {
         title="New product"
       >
         <CreateProductForm onDone={() => setCreateOpen(false)} />
+      </Drawer>
+
+      <Drawer
+        open={editDetails !== null}
+        onClose={() => setEditDetails(null)}
+        title={editDetails ? `Edit details — ${editDetails.title}` : "Edit details"}
+      >
+        {editDetails && (
+          <EditDetailsForm product={editDetails} onDone={() => setEditDetails(null)} />
+        )}
       </Drawer>
 
       <Drawer
@@ -323,16 +335,76 @@ function ForecastView({ productId }: { productId: string }) {
   );
 }
 
+/** Title + AI-assisted description editing for an existing product (PRD §5.6 task 27). */
+function EditDetailsForm({
+  product,
+  onDone,
+}: {
+  product: Product;
+  onDone: () => void;
+}) {
+  const { toast } = useToast();
+  const update = useUpdateProduct();
+  const [title, setTitle] = useState(product.title);
+  const [description, setDescription] = useState(product.description ?? "");
+
+  const save = () => {
+    update.mutate(
+      { id: product.id, patch: { title: title.trim(), description: description.trim() } },
+      {
+        onSuccess: () => {
+          toast({ title: "Details saved", description: title, variant: "success" });
+          onDone();
+        },
+        onError: (e) =>
+          toast({
+            title: "Update failed",
+            description: e instanceof ApiError ? e.problem.detail : e.message,
+            variant: "error",
+          }),
+      },
+    );
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Input
+        label="Title"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        required
+      />
+      <DescriptionField
+        id={`edit-desc-${product.id}`}
+        title={title}
+        value={description}
+        onChange={setDescription}
+      />
+      <Button
+        variant="primary"
+        loading={update.isPending}
+        disabled={!title.trim()}
+        onClick={save}
+        className="self-end"
+      >
+        Save details
+      </Button>
+    </div>
+  );
+}
+
 function ProductRow({
   product,
   selected,
   onToggleSelect,
   onForecast,
+  onEditDetails,
 }: {
   product: Product;
   selected: boolean;
   onToggleSelect: () => void;
   onForecast: () => void;
+  onEditDetails: () => void;
 }) {
   const { toast } = useToast();
   const update = useUpdateProduct();
@@ -462,6 +534,14 @@ function ProductRow({
               <Button
                 size="sm"
                 variant="ghost"
+                leftIcon={<Sparkles className="h-4 w-4" aria-hidden="true" />}
+                onClick={onEditDetails}
+              >
+                Details
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
                 leftIcon={<LineChartIcon className="h-4 w-4" aria-hidden="true" />}
                 onClick={onForecast}
               >
@@ -497,34 +577,13 @@ function ProductRow({
 function CreateProductForm({ onDone }: { onDone: () => void }) {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const generate = useGenerateDescription();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [stock, setStock] = useState("");
-  const [variants, setVariants] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   const canSubmit = title.trim() && price !== "" && stock !== "";
-
-  const onGenerate = () => {
-    if (!title.trim()) {
-      toast({ title: "Add a title first", variant: "warning" });
-      return;
-    }
-    generate.mutate(
-      { title, length: "medium", tone: "professional" },
-      {
-        onSuccess: (r) => setVariants(r.variants),
-        onError: (e) =>
-          toast({
-            title: "Couldn't generate",
-            description: e instanceof ApiError ? e.problem.detail : e.message,
-            variant: "error",
-          }),
-      },
-    );
-  };
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -565,48 +624,12 @@ function CreateProductForm({ onDone }: { onDone: () => void }) {
         required
       />
 
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between">
-          <label htmlFor="new-desc" className="text-sm font-semibold text-foreground">
-            Description
-          </label>
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            loading={generate.isPending}
-            leftIcon={<Sparkles className="h-4 w-4" aria-hidden="true" />}
-            onClick={onGenerate}
-          >
-            Generate with AI
-          </Button>
-        </div>
-        <textarea
-          id="new-desc"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          rows={4}
-          placeholder="Describe your product, or generate a draft with AI."
-          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/20"
-        />
-        {variants.length > 0 && (
-          <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/40 p-3">
-            <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-              AI suggestions — click to use
-            </p>
-            {variants.map((v, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => setDescription(v)}
-                className="rounded-md border border-border bg-surface p-2 text-left text-sm text-foreground transition-colors hover:border-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {v}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      <DescriptionField
+        id="new-desc"
+        title={title}
+        value={description}
+        onChange={setDescription}
+      />
 
       <div className="grid grid-cols-2 gap-3">
         <Input

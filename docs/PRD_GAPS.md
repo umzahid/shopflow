@@ -80,8 +80,8 @@
 - **Verify:** `docker logs shopflow-frontend-1 --tail 5` after a request.
 - **Commit:** `feat(obs): frontend server-side JSON request logging + traceId`
 
-### GAP-05 · AI description button in product EDIT flow — Domain 5 (§5.6 task 27)
-- [ ] **What:** "one-click button in the merchant product editor" — exists in the
+### GAP-05 · AI description button in product EDIT flow — Domain 5 (§5.6 task 27) ✅ DONE 2026-07-09
+- [x] **What:** "one-click button in the merchant product editor" — exists in the
   CREATE form only; the inline row-edit has no description editing at all.
 - **Evidence:** `frontend/src/app/merchant/products/page.tsx` — Generate button in
   `CreateProductForm` only.

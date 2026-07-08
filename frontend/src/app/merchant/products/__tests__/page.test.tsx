@@ -30,6 +30,8 @@ const PRODUCTS = [
   product("p-3", "Candle Set", "24.00", 40),
 ];
 
+const updateMutate = vi.fn();
+
 vi.mock("@/lib/merchant", () => ({
   merchantKeys: { all: ["merchant"] },
   useMerchantProducts: () => ({
@@ -38,7 +40,7 @@ vi.mock("@/lib/merchant", () => ({
     isError: false,
     error: null,
   }),
-  useUpdateProduct: () => ({ mutate: vi.fn(), mutateAsync: vi.fn() }),
+  useUpdateProduct: () => ({ mutate: updateMutate, mutateAsync: vi.fn(), isPending: false }),
   useProductForecast: () => ({ data: undefined, isLoading: false }),
   useGenerateDescription: () => ({ mutate: vi.fn(), isPending: false }),
 }));
@@ -83,5 +85,32 @@ describe("Product manager — search & column sort (PRD §2.3)", () => {
 
     await user.click(screen.getByRole("button", { name: /sort by stock/i }));
     expect(rowTitles()[0]).toContain("Leather Bag"); // stock 3 first (ascending)
+  });
+});
+
+describe("Product manager — edit details with AI description (PRD §5.6)", () => {
+  it("opens the details drawer and saves title + description via PATCH", async () => {
+    updateMutate.mockClear();
+    const user = userEvent.setup();
+    render(<ProductManagerPage />);
+
+    await user.click(screen.getAllByRole("button", { name: /details/i })[0]);
+    const drawer = screen.getByRole("dialog");
+    expect(within(drawer).getByLabelText("Description")).toBeInTheDocument();
+    expect(
+      within(drawer).getByRole("button", { name: /generate with ai/i }),
+    ).toBeInTheDocument();
+
+    await user.clear(within(drawer).getByLabelText("Description"));
+    await user.type(within(drawer).getByLabelText("Description"), "Hand-thrown, food-safe glaze.");
+    await user.click(within(drawer).getByRole("button", { name: /save details/i }));
+
+    expect(updateMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "p-1",
+        patch: expect.objectContaining({ description: "Hand-thrown, food-safe glaze." }),
+      }),
+      expect.anything(),
+    );
   });
 });

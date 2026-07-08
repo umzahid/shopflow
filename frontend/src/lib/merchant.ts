@@ -89,6 +89,8 @@ export function useMerchantOrders(
 }
 
 interface ProductPatch {
+  title?: string;
+  description?: string;
   price?: number;
   stock_qty?: number;
   status?: ProductStatus;
