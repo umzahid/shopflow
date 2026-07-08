@@ -118,6 +118,8 @@ Per the PRD ("Any deviation must be noted in your README with justification"):
 - **Fraud review threshold 0.6 (PRD §5.4 says 0.7).** On the held-out synthetic set, 0.6 gives precision 0.88 / recall 0.74 — both above the PRD targets (≥0.85 / ≥0.70); at 0.7 recall drops below target. Override via `FRAUD_REVIEW_THRESHOLD` env var (`app/ml/fraud.py`).
 - **Synthetic sales seeder defaults to 180 days (PRD §5.3 says 2 years).** 180 days keeps local seeding/CI fast while still exercising seasonality; `--days 730` reproduces the full PRD horizon.
 - **Backend image 2.4 GB (PRD §3.3 says < 200 MB).** CPU-only torch + sentence-transformers + Prophet + LightGBM are inherent to serving ML in-process. The frontend image is 199 MB. Mitigation options (ONNX Runtime, ML sidecar) are documented in `docs/devops.md`.
+- **Analytics revenue chart is a bar chart (PRD §2.3 says "line chart").** Daily revenue is discrete per-day amounts, which bars represent honestly; the hand-rolled chart family (`Charts.tsx`) keeps the codebase dependency-free. Same data, same axis, different mark.
+- **Checkout is 3 steps, not 4 (PRD §2.2: address → shipping → payment → confirmation).** Shipping and payment are consolidated into one "Address & payment" step ("Cart → Address & payment → Confirmation", with a visual step indicator) — there is no real payment provider or shipping-method selection in scope (webhook is mocked per PRD §1.3), so a separate step would be an empty screen.
 
 ## Known Issues / Work in Progress
 
