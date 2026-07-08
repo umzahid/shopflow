@@ -3,6 +3,7 @@
 import { Eye, Printer, ShieldAlert } from "lucide-react";
 import { useState } from "react";
 
+import { OrderTimeline } from "@/components/OrderTimeline";
 import { Button } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Drawer";
 import { Select } from "@/components/ui/Select";
@@ -289,6 +290,11 @@ function OrderDetail({
       </div>
 
       <FraudPanel order={order} />
+
+      <section>
+        <h3 className="mb-2 font-heading text-sm font-bold text-foreground">Timeline</h3>
+        <OrderTimeline orderId={order.id} />
+      </section>
 
       <section>
         <h3 className="mb-2 font-heading text-sm font-bold text-foreground">Items</h3>
