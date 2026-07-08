@@ -66,7 +66,6 @@ export default function Home() {
               fill
               priority
               sizes="100vw"
-              quality={90}
               className="object-cover animate-kenburns"
             />
             {/* Dark scrim: opaque at top-left where the headline sits,
