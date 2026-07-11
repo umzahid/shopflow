@@ -17,3 +17,9 @@ provider "aws" {
   skip_requesting_account_id  = true
   s3_use_path_style           = true
 }
+
+# Override files replace the backend block wholesale: the LocalStack run uses
+# throwaway local state instead of the real S3 remote backend (backend.tf).
+terraform {
+  backend "local" {}
+}

@@ -114,19 +114,22 @@
   showing a non-skipped, non-soft-failed step).
 - **Commit:** `ci(security): detect-secrets as a hard gate with audited baseline`
 
-### GAP-08 · Terraform quick wins — Domain 4 (§4.2/§4.3)
-- [ ] 8a. **Route53 module** (10th component): hosted zone + A/ALIAS records for
+### GAP-08 · Terraform quick wins — Domain 4 (§4.2/§4.3) ✅ DONE 2026-07-11
+- [x] 8a. **Route53 module** (10th component): hosted zone + A/ALIAS records for
   `app.` / `api.` (mock domain fine per PRD). ~50 lines; wire into root; `terraform validate`.
-- [ ] 8b. **HPA maxReplicas 3 → 10** (`k8s/backend.yaml:105`; PRD wants 2-10). Re-run
-  kubeconform.
-- [ ] 8c. **Wire the spot toggle**: `node_capacity_type` exists in
+  *(app = ALIAS→CloudFront; api = A→TEST-NET-3 placeholder until the ingress ALB exists.)*
+- [x] 8b. **HPA maxReplicas 3 → 10** (`k8s/backend.yaml:105`; PRD wants 2-10). Re-run
+  kubeconform. *(minReplicas also 1→2 to match the PRD's 2-10 range.)*
+- [x] 8c. **Wire the spot toggle**: `node_capacity_type` exists in
   `modules/compute/variables.tf` but is never passed from `main.tf` nor set in
   `environments/staging.tfvars` (set staging to SPOT).
-- [ ] 8d. **Activate remote state**: rename `backend.tf.example` → `backend.tf`
+- [x] 8d. **Activate remote state**: rename `backend.tf.example` → `backend.tf`
   behind a documented flag/comment (do NOT break local `terraform validate` — keep
-  `-backend=false` in CI/docs if needed).
-- [ ] 8e. **CDN-module S3 lifecycle**: noncurrent versions currently expire at 30d;
-  align with the storage module's IA@30d → Glacier@90d tiering.
+  `-backend=false` in CI/docs if needed). *(LocalStack run.sh keeps working via a
+  `backend "local" {}` override — init proven to select the local backend.)*
+- [x] 8e. **CDN-module S3 lifecycle**: noncurrent versions currently expire at 30d;
+  align with the storage module's IA@30d → Glacier@90d tiering. *(Tier IA@30 →
+  Glacier@90, expire@365; current objects stay STANDARD — CloudFront can't serve Glacier.)*
 - **Verify:** `terraform -chdir=infrastructure validate` clean (docker hashicorp/terraform
   image is the established runner); `kubeconform -strict k8s/`.
 - **Commit:** `feat(infra): route53 module, HPA 2-10, spot staging, remote state, lifecycle alignment`

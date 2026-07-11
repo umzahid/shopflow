@@ -36,6 +36,7 @@ module "compute" {
   endpoint_public_access = var.endpoint_public_access
   public_access_cidrs    = var.public_access_cidrs
   node_instance_types    = var.node_instance_types
+  node_capacity_type     = var.node_capacity_type
 }
 
 module "cdn" {
@@ -53,6 +54,15 @@ module "storage" {
   source = "./modules/storage"
 
   name = local.name
+}
+
+module "route53" {
+  source = "./modules/route53"
+
+  name                  = local.name
+  domain_name           = var.dns_domain_name
+  app_alias_domain_name = module.cdn.distribution_domain_name
+  app_alias_zone_id     = module.cdn.distribution_hosted_zone_id
 }
 
 module "database" {

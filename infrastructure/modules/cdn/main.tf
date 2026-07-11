@@ -28,19 +28,32 @@ resource "aws_s3_bucket_versioning" "origin" {
   }
 }
 
-# Versioning without expiry grows storage without bound — cap noncurrent
-# versions and clean up failed multipart uploads (cost review, Entry 22).
+# Versioning without expiry grows storage without bound — tier noncurrent
+# versions down instead of deleting them at 30d (IA@30d → Glacier@90d, matching
+# the storage module's PRD tiering), expire them after a year, and clean up
+# failed multipart uploads (cost review, Entry 22). Current objects stay in
+# STANDARD: CloudFront cannot serve from IA-retrieval or Glacier classes.
 resource "aws_s3_bucket_lifecycle_configuration" "origin" {
   bucket = aws_s3_bucket.origin.id
 
   rule {
-    id     = "expire-noncurrent-versions"
+    id     = "tier-then-expire-noncurrent-versions"
     status = "Enabled"
 
     filter {}
 
-    noncurrent_version_expiration {
+    noncurrent_version_transition {
       noncurrent_days = 30
+      storage_class   = "STANDARD_IA"
+    }
+
+    noncurrent_version_transition {
+      noncurrent_days = 90
+      storage_class   = "GLACIER"
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 365
     }
 
     abort_incomplete_multipart_upload {

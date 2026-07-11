@@ -46,6 +46,12 @@ variable "node_instance_types" {
   default     = ["t3.small"]
 }
 
+variable "node_capacity_type" {
+  description = "ON_DEMAND or SPOT capacity for EKS worker nodes. SPOT suits interruption-tolerant environments (staging)."
+  type        = string
+  default     = "ON_DEMAND"
+}
+
 variable "endpoint_public_access" {
   description = "Expose the EKS API endpoint publicly. Private access is always on; set false for prod."
   type        = bool
@@ -86,6 +92,13 @@ variable "cdn_log_bucket_domain_name" {
   description = "Optional S3 bucket domain for CloudFront access logs. Null disables logging."
   type        = string
   default     = null
+}
+
+# ── DNS ─────────────────────────────────────────────────────────────────────
+variable "dns_domain_name" {
+  description = "Route 53 hosted-zone domain. Defaults to a reserved documentation domain (PRD: mock domain acceptable); set a real one when available."
+  type        = string
+  default     = "shopflow.example"
 }
 
 # ── Tagging (Well-Architected cost allocation) ──────────────────────────────
