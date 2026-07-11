@@ -136,9 +136,12 @@
 
 ## P3 — polish and bonuses
 
-### GAP-09 · ProductCard rating stars — Domain 2 fine print (§2.4)
-- [ ] **What:** PRD's ProductCard lists "rating stars"; the card renders a hardcoded
+### GAP-09 · ProductCard rating stars — Domain 2 fine print (§2.4) ✅ DONE 2026-07-11
+- [x] **What:** PRD's ProductCard lists "rating stars"; the card renders a hardcoded
   "—"/"New listing" placeholder (no rating prop; list API carries no avg rating).
+  *(Closed via option (a): `avg_rating` on the list response — one aggregate over the
+  page's ids — + 5-star row on the card matching the detail-page idiom; unrated
+  products keep the "New listing" placeholder.)*
 - **How (choose one):** (a) add `avg_rating` to the product list response (subquery,
   same shape the detail page uses) and render stars; or (b) add one line to README
   deviations. Option (a) is a small BE+FE change; (b) is honest if time-boxed.

@@ -260,10 +260,25 @@ async def list_products(
             rows, page_size, lambda p: _encode_price_cursor(p.price, p.id)
         )
 
-    return PaginatedProducts(
-        items=[ProductResponse.model_validate(p) for p in items],
-        next_cursor=next_cursor,
-    )
+    # One aggregate over just this page's ids (≤ page_size) — cheaper than a
+    # correlated subquery per row and keeps both cursor branches untouched.
+    avg_by_product: dict[str, float] = {}
+    if items:
+        rating_rows = await db.execute(
+            select(Review.product_id, func.avg(Review.rating))
+            .where(Review.product_id.in_([p.id for p in items]))
+            .group_by(Review.product_id)
+        )
+        # Same shape as the reviews histogram: float rounded to 2 places.
+        avg_by_product = {pid: round(float(avg), 2) for pid, avg in rating_rows}
+
+    responses = []
+    for p in items:
+        resp = ProductResponse.model_validate(p)
+        resp.avg_rating = avg_by_product.get(p.id)
+        responses.append(resp)
+
+    return PaginatedProducts(items=responses, next_cursor=next_cursor)
 
 
 # ---------------------------------------------------------------------------

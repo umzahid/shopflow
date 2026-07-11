@@ -36,8 +36,18 @@ describe("ProductCard", () => {
     expect(screen.getByText("$129.50")).toBeInTheDocument();
   });
 
-  it("shows the rating placeholder until reviews are wired up", () => {
-    render(<ProductCard product={makeProduct()} />);
+  it("renders rating stars and the numeric average when the product is rated", () => {
+    render(<ProductCard product={makeProduct({ avg_rating: 4.5 })} />);
+
+    expect(
+      screen.getByRole("img", { name: "Rated 4.5 out of 5" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("4.5")).toBeInTheDocument();
+    expect(screen.queryByText("New listing")).not.toBeInTheDocument();
+  });
+
+  it("shows the New listing placeholder when a product has no reviews", () => {
+    render(<ProductCard product={makeProduct({ avg_rating: null })} />);
 
     expect(screen.getByText("New listing")).toBeInTheDocument();
     expect(screen.getByText("—")).toBeInTheDocument();
