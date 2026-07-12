@@ -1,5 +1,12 @@
 """Shared helpers for integration tests — register, login, auth header."""
 from httpx import AsyncClient
+from sqlalchemy import update
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from app.core.config import settings
+from app.models.models import User, UserRole
+
+_TEST_DB_URL = settings.DATABASE_URL.rsplit("/", 1)[0] + "/shopflow_test"
 
 
 async def register(client: AsyncClient, email: str, password: str = "Password123", role: str = "customer") -> dict:
@@ -27,8 +34,27 @@ async def register_merchant(client: AsyncClient, email: str = "m@e.com") -> tupl
 
 
 async def register_admin(client: AsyncClient, email: str = "a@e.com") -> tuple[str, str]:
-    data = await register(client, email, role="admin")
-    return data["access_token"], data["user"]["id"]
+    """Return (access_token, user_id) for an admin.
+
+    Admin is not self-registerable (privilege-escalation guard in auth.register),
+    so provision it the way real admins are: create a normal account, promote it
+    in the DB, then log in for a token that carries the admin role.
+    """
+    data = await register(client, email, role="customer")
+    user_id = data["user"]["id"]
+
+    engine = create_async_engine(_TEST_DB_URL)
+    Session = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with Session() as db:
+            await db.execute(update(User).where(User.id == user_id).values(role=UserRole.admin))
+            await db.commit()
+    finally:
+        await engine.dispose()
+
+    res = await client.post("/api/v1/auth/login", json={"email": email, "password": "Password123"})
+    assert res.status_code == 200, res.text
+    return res.json()["access_token"], user_id
 
 
 async def create_product(

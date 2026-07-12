@@ -16,6 +16,32 @@ async def test_register_success(client):
 
 
 @pytest.mark.asyncio
+async def test_register_merchant_role_allowed(client):
+    # Merchant self-registration is intended — that's how merchants onboard.
+    res = await client.post("/api/v1/auth/register", json={
+        "email": "merch@shopflow.io",
+        "password": "Password123",
+        "role": "merchant",
+    })
+    assert res.status_code == 201
+    assert res.json()["user"]["role"] == "merchant"
+
+
+@pytest.mark.asyncio
+async def test_register_cannot_self_assign_admin(client):
+    # Privilege escalation guard: the public endpoint must never mint an admin.
+    res = await client.post("/api/v1/auth/register", json={
+        "email": "sneaky-admin@shopflow.io",
+        "password": "Password123",
+        "role": "admin",
+    })
+    assert res.status_code == 403
+    assert res.json()["status"] == 403
+    # And no admin account was created — a subsequent login is still non-admin.
+    assert "access_token" not in res.json()
+
+
+@pytest.mark.asyncio
 async def test_register_duplicate_email(client):
     payload = {"email": "dup@shopflow.io", "password": "Password123"}
     await client.post("/api/v1/auth/register", json=payload)

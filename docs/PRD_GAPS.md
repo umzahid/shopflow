@@ -158,12 +158,17 @@
   wrappers removed so tabs are owned by the tablist.)*
 - **Commit:** `test(a11y): axe coverage for detail, merchant, and checkout pages`
 
-### GAP-11 · Authenticated ZAP scan — Domain 6 (§6.5)
-- [ ] **What:** current ZAP scans are unauthenticated (`security/zap-scan.sh:29-30`);
+### GAP-11 · Authenticated ZAP scan — Domain 6 (§6.5) ✅ DONE 2026-07-13
+- [x] **What:** current ZAP scans are unauthenticated (`security/zap-scan.sh:29-30`);
   merchant/admin surface (IDOR, priv-esc, copilot isolation boundary) unscanned.
 - **How:** extend `zap-scan.sh` with a session-token context (login via API, pass
   Bearer header); triage findings into `docs/zap-findings.md`.
 - **Accept:** scan ran against `/merchant/*` + `/admin/*`; 0 High; findings triaged.
+  *(`security/zap-scan.sh authed`: per-role Bearer via a ZAP hook, merchant+admin
+  passes reaching 2xx on protected routes. 0 real High — the one SQLi flag is a
+  verified false positive (echo-back fools the boolean heuristic; ORM-parameterized).
+  Found + fixed 3 real bugs: admin self-register priv-esc (High), 500-on-non-UUID
+  path ids on 4 endpoints, 500-on-NUL-byte in search. Triage in docs/zap-findings.md.)*
 - **Commit:** `security(zap): authenticated scan of merchant/admin surface`
 
 ### GAP-12 · OpenTelemetry tracing — Domain 3 bonus (+10 pts)

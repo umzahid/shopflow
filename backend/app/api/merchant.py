@@ -7,6 +7,7 @@ sees data on their own products.
 import json
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, select
@@ -332,7 +333,7 @@ async def merchant_orders(
     response_model=ProductForecastResponse,
 )
 async def product_forecast(
-    product_id: str,
+    product_id: UUID,
     request: Request,
     horizon: int = Query(default=30, ge=1, le=180),
     force_refresh: bool = Query(default=False),
@@ -345,10 +346,14 @@ async def product_forecast(
     revenue-status sales history — Prophet fits below that threshold produce
     uninformative confidence bands.
     """
+    # UUID path param → str for the native-uuid column comparison and the
+    # downstream service/response (which work in string ids), matching the
+    # convention used elsewhere (e.g. get_product).
+    pid = str(product_id)
     product = (
         await db.execute(
             select(Product).where(
-                Product.id == product_id, Product.deleted_at.is_(None)
+                Product.id == pid, Product.deleted_at.is_(None)
             )
         )
     ).scalar_one_or_none()
@@ -363,9 +368,9 @@ async def product_forecast(
             "You do not own this product", request.url.path,
         )
 
-    points = await forecast_product_demand(db, product_id, horizon, force_refresh=force_refresh)
+    points = await forecast_product_demand(db, pid, horizon, force_refresh=force_refresh)
     return ProductForecastResponse(
-        product_id=product_id,
+        product_id=pid,
         horizon_days=horizon,
         points=[
             ForecastPointResponse(

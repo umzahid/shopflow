@@ -89,6 +89,17 @@ async def test_forecast_404_for_missing_product(client):
 
 
 @pytest.mark.asyncio
+async def test_forecast_rejects_non_uuid_product(client):
+    # Non-UUID product id must 422, not 500 from a bad uuid cast (authenticated
+    # ZAP scan hit this on the merchant surface).
+    mtoken, _ = await register_merchant(client, "m-fc-uuid@e.com")
+    res = await client.get(
+        "/api/v1/merchant/products/not-a-uuid/forecast", headers=bearer(mtoken)
+    )
+    assert res.status_code == 422, res.text
+
+
+@pytest.mark.asyncio
 async def test_forecast_403_for_other_merchants_product(client):
     m1, _ = await register_merchant(client, "m-fc-a@e.com")
     m2, _ = await register_merchant(client, "m-fc-b@e.com")

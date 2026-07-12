@@ -1,0 +1,17 @@
+# Authenticated-scan overlay for security/zap-scan.sh `authed`.
+# Two backend tweaks that only make sense for the duration of a scan:
+#   - RATE_LIMIT_PUBLIC: same single-IP throttle relief the perf overlay uses,
+#     so ZAP's traffic isn't corrupted by 429s.
+#   - JWT_ACCESS_TOKEN_EXPIRE_MINUTES: a full active api-scan can outlast the
+#     15-minute default, which would 401 every request mid-run and poison the
+#     results. Raised for the scan window only.
+# NEVER use this overlay outside a scan. Restore with `docker compose up -d backend`.
+services:
+  backend:
+    environment:
+      # Both tiers: an unauthenticated scan keys on the public tier, an
+      # authenticated one keys per-user on the authenticated tier. Raise both
+      # or the authenticated scan drowns in 429s.
+      RATE_LIMIT_PUBLIC: "1000000/minute"
+      RATE_LIMIT_AUTHENTICATED: "1000000/minute"
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "180"

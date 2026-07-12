@@ -1,7 +1,15 @@
 """Search modes: lexical (tsvector), semantic (pgvector), hybrid (weighted)."""
 import pytest
 
-from tests.integration.helpers import bearer, create_product, register_merchant
+from tests.integration.helpers import (
+    add_to_cart,
+    advance_order_to_delivered,
+    bearer,
+    checkout,
+    create_product,
+    register_customer,
+    register_merchant,
+)
 
 
 @pytest.mark.asyncio
@@ -15,6 +23,40 @@ async def test_lexical_search_finds_by_token(client):
     titles = [p["title"] for p in res.json()]
     assert "Red Running Shoes" in titles
     assert "Blue Coffee Mug" not in titles
+
+
+@pytest.mark.asyncio
+async def test_search_results_carry_avg_rating(client):
+    # ProductCard renders from both /products and /products/search, so search
+    # results must carry avg_rating too — else a rated product shows the
+    # "New listing" placeholder in search (found by code review of GAP-09).
+    mt, _ = await register_merchant(client, "srate@e.com")
+    rated = await create_product(client, mt, title="Rated Search Widget")
+
+    ct, _ = await register_customer(client, "csrate@e.com")
+    await add_to_cart(client, ct, rated["id"])
+    order = (await checkout(client, ct)).json()
+    await advance_order_to_delivered(client, mt, order["id"])
+    posted = await client.post(
+        f"/api/v1/products/{rated['id']}/reviews",
+        json={"rating": 5, "body": "great"},
+        headers=bearer(ct),
+    )
+    assert posted.status_code == 201, posted.text
+
+    res = await client.get("/api/v1/products/search?q=widget&mode=lexical")
+    assert res.status_code == 200
+    hit = next(p for p in res.json() if p["id"] == rated["id"])
+    assert hit["avg_rating"] == 5.0
+
+
+@pytest.mark.asyncio
+async def test_search_rejects_null_byte_query(client):
+    # A NUL byte passes Pydantic min_length but Postgres text/tsquery rejects it;
+    # it must be a clean 400, not a 500 (found by the authenticated ZAP scan).
+    res = await client.get("/api/v1/products/search", params={"q": "\x00", "mode": "hybrid"})
+    assert res.status_code == 400
+    assert res.json()["status"] == 400
 
 
 @pytest.mark.asyncio

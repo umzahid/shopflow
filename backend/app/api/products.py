@@ -92,6 +92,22 @@ def _active_product_filters():
     return (Product.deleted_at.is_(None), Product.status == ProductStatus.active)
 
 
+async def _avg_ratings_for(db: AsyncSession, product_ids: list[str]) -> dict[str, float]:
+    """Map product_id → average review rating (2 dp) for the given ids.
+
+    One GROUP BY over the page/result set — cheaper than a correlated subquery
+    per row. Products with no reviews are simply absent from the map.
+    """
+    if not product_ids:
+        return {}
+    rows = await db.execute(
+        select(Review.product_id, func.avg(Review.rating))
+        .where(Review.product_id.in_(product_ids))
+        .group_by(Review.product_id)
+    )
+    return {pid: round(float(avg), 2) for pid, avg in rows}
+
+
 def _tsv_expr():
     return func.to_tsvector(
         "english",
@@ -159,6 +175,7 @@ async def _hybrid_search(db: AsyncSession, q: str, limit: int):
 
 @router.get("/search", response_model=list[ProductSearchResult])
 async def search_products(
+    request: Request,
     q: str = Query(min_length=1, max_length=255),
     limit: int = Query(default=20, ge=1, le=50),
     mode: Literal["lexical", "semantic", "hybrid"] = Query(default="hybrid"),
@@ -171,6 +188,14 @@ async def search_products(
     - `hybrid` (default): weighted blend of both, favoring semantic for recall
       and lexical for exact-term precision.
     """
+    # NUL bytes pass Pydantic's min_length but Postgres text/tsquery reject them
+    # with a hard error — reject up front as a 400 rather than surfacing a 500.
+    if "\x00" in q:
+        raise _problem(
+            status.HTTP_400_BAD_REQUEST, "Bad Request",
+            "Search query contains an invalid null byte", request.url.path,
+        )
+
     if mode == "lexical":
         rows = await _lexical_search(db, q, limit)
     elif mode == "semantic":
@@ -178,13 +203,15 @@ async def search_products(
     else:
         rows = await _hybrid_search(db, q, limit)
 
-    return [
-        ProductSearchResult(
-            **ProductResponse.model_validate(p).model_dump(),
-            relevance_score=float(s),
-        )
-        for p, s in rows
-    ]
+    # ProductCard (shared with the list grid) renders stars from avg_rating, so
+    # search results must carry it too — otherwise rated products show as unrated.
+    avg_by_product = await _avg_ratings_for(db, [p.id for p, _ in rows])
+    results = []
+    for p, s in rows:
+        data = ProductResponse.model_validate(p).model_dump()
+        data["avg_rating"] = avg_by_product.get(p.id)
+        results.append(ProductSearchResult(**data, relevance_score=float(s)))
+    return results
 
 
 # ---------------------------------------------------------------------------
@@ -260,17 +287,7 @@ async def list_products(
             rows, page_size, lambda p: _encode_price_cursor(p.price, p.id)
         )
 
-    # One aggregate over just this page's ids (≤ page_size) — cheaper than a
-    # correlated subquery per row and keeps both cursor branches untouched.
-    avg_by_product: dict[str, float] = {}
-    if items:
-        rating_rows = await db.execute(
-            select(Review.product_id, func.avg(Review.rating))
-            .where(Review.product_id.in_([p.id for p in items]))
-            .group_by(Review.product_id)
-        )
-        # Same shape as the reviews histogram: float rounded to 2 places.
-        avg_by_product = {pid: round(float(avg), 2) for pid, avg in rating_rows}
+    avg_by_product = await _avg_ratings_for(db, [p.id for p in items])
 
     responses = []
     for p in items:

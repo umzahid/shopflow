@@ -1,13 +1,15 @@
 # OWASP ZAP Findings & Analysis — ShopFlow
 
-**Scans:** 2026-07-03 (baseline/API) + 2026-07-06 (active), ZAP `stable` (Docker),
-against the local compose stack.
+**Scans:** 2026-07-03 (baseline/API) + 2026-07-06 (active) + 2026-07-13
+(**authenticated** merchant/admin), ZAP `stable` (Docker), against the local compose stack.
 
 | Scan | Tool | Target | Result |
 |---|---|---|---|
 | API | `zap-api-scan.py` (OpenAPI import, 36 routes) | `http://localhost:8000` | **0 FAIL · 1 WARN · 118 PASS** |
 | Frontend | `zap-baseline.py` (spider + passive) | `http://localhost:3000` | **0 FAIL · 10 WARN · 57 PASS** |
 | Frontend (active) | `zap-full-scan.py` (spider + **active attack**) | `http://localhost:3000` | **0 alerts on every active rule** (see below) |
+| **API (authenticated, merchant)** | `zap-api-scan.py` + Bearer hook | `/merchant/*` + full API | **0 FAIL · 1 WARN (expected 503s) · 119 PASS** |
+| **API (authenticated, admin)** | `zap-api-scan.py` + Bearer hook | `/admin/*` + full API | **0 FAIL · 1 WARN (1 false-positive SQLi) · 118 PASS** |
 
 ## Active scan (2026-07-06)
 
@@ -34,9 +36,58 @@ validation, and Next.js escapes output by default.
 
 **No High or Critical findings on any scan.** The baseline run establishes the
 header/config posture; the **active** run (above) additionally confirms
-injection resistance (SQLi/XSS/RCE all 0 alerts). Remaining coverage gap:
-**authenticated** active scanning of merchant/admin surfaces (the scans run
-unauthenticated) — noted as future work at the end.
+injection resistance (SQLi/XSS/RCE all 0 alerts); the **authenticated** run
+(below) closes the merchant/admin coverage gap.
+
+## Authenticated scan (2026-07-13)
+
+Ran `zap-api-scan.py` twice against the OpenAPI spec — once as a merchant, once
+as an admin — so the role-gated `/merchant/*` and `/admin/*` surfaces are
+exercised with a real session. Reproduce: `security/zap-scan.sh authed`.
+
+**How auth is injected.** The API is JWT-bearer. The scan logs in per role
+(`require_role` is exact-match, so admin is *not* a merchant superuser — both
+tokens are needed) and a hook (`security/zap_auth_hook.py`) adds
+`Authorization: Bearer <token>` to every request via the ZAP replacer API.
+A scan overlay (`security/docker-compose.scan.yml`) raises both rate-limit
+tiers (an authenticated scan keys per-user on the 1000/min tier) and the JWT TTL
+for the scan window, then the stock backend is restored. Admin is provisioned
+out-of-band (`security/seed_scan_admin.py`) because admin self-registration is
+now blocked (see F12).
+
+**Result: 0 real High/Critical.** Both roles reached their endpoints
+authenticated (e.g. `GET /merchant/dashboard`, `GET /admin/platform-stats`
+return 2xx, not 401). Two warnings, both non-issues:
+
+- **AI endpoints return 503** (`/merchant/copilot`, `/generate-description`,
+  `/weekly-narrative`). Expected: no `ANTHROPIC_API_KEY` in the dev stack, so
+  the services degrade to 503 Service Unavailable by design. Not a defect.
+- **SQL Injection on `POST /admin/coupons` `code` — FALSE POSITIVE.** ZAP's
+  boolean heuristic sent `code=…AND 1=1 --` vs `…AND 1=2 --` and saw different
+  responses. Verified false: the create endpoint echoes the submitted `code`
+  back verbatim, so the two responses differ *because they contain the literal
+  strings "1=1" and "1=2"*, not because a query was manipulated. Both payloads
+  are stored as literal codes with identical discount values; the code path is
+  pure SQLAlchemy ORM (`select(Coupon).where(Coupon.code == body.code)` +
+  ORM insert), no raw SQL. Confidence was Medium, consistent with a heuristic FP.
+
+### Bugs the authenticated scan found (all fixed)
+
+- **F12 · Admin privilege escalation via self-registration (High) — FIXED.**
+  `POST /auth/register` accepted `role: "admin"` and returned a working admin
+  token — anyone could mint an admin and reach every `/admin/*` endpoint.
+  Registration now rejects the admin role with 403 (merchant/customer still
+  self-register); admins are provisioned out-of-band. Regression tests in
+  `tests/integration/test_auth.py`.
+- **F13 · Unhandled 500 on non-UUID path ids (Medium: info disclosure) — FIXED.**
+  `PATCH /admin/users/{id}`, `DELETE /admin/coupons/{id}`,
+  `DELETE|PATCH /users/me/addresses/{id}`, and
+  `GET /merchant/products/{id}/forecast` typed the id as `str`; a non-UUID value
+  reached a native-uuid column comparison and 500'd, leaking a debug error page.
+  Now typed as `UUID` (FastAPI returns 422, matching the rest of the API).
+- **F14 · Unhandled 500 on NUL byte in search (Medium) — FIXED.**
+  `GET /products/search?q=%00` passed Pydantic's `min_length` but Postgres
+  text/tsquery rejected the NUL, 500ing. Now rejected as a 400 up front.
 
 Reproduce: `security/zap-scan.sh api` and `security/zap-scan.sh frontend`
 (reports written to gitignored `security/reports/`).
@@ -136,11 +187,13 @@ exposure, no Log4Shell/Spring4Shell/Shellshock indicators, cookies carry
 - **Passive + spider only.** No active injection payloads were sent. Add a ZAP
   full/active scan (`zap-full-scan.py`) against a disposable DB before relying
   on the injection-class PASS results.
-- **Unauthenticated.** The scans never logged in, so merchant/admin endpoints
-  and the authenticated attack surface (IDOR, privilege escalation, the copilot
-  merchant-isolation boundary) are **not** covered here — merchant isolation is
-  instead proven by two-merchant tests in the backend suite. Authenticated ZAP
-  scanning with a session token is future work.
+- **Authenticated scanning: done (2026-07-13, see above).** The merchant and
+  admin surfaces are now scanned with real session tokens; that run found and
+  fixed the privilege-escalation and 500/info-disclosure bugs (F12–F14).
+  Merchant→merchant data isolation (IDOR) remains additionally proven by the
+  two-merchant tests in the backend suite. The copilot merchant-isolation
+  boundary couldn't be exercised by injection here because the AI endpoints
+  return 503 without an API key — that boundary stays covered by unit tests.
 - **Frontend header pass** (F2–F5, F7) to land the `next.config.js` `headers()`
   + nonce-based CSP.
 - **Production TLS/HSTS** is untested — dev runs HTTP; `COOKIE_SECURE` and HSTS

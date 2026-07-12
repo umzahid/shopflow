@@ -12,6 +12,17 @@ from tests.integration.helpers import (
 
 
 @pytest.mark.asyncio
+async def test_admin_id_endpoints_reject_non_uuid(client):
+    # Non-UUID path ids must 422 (FastAPI validation), not 500 from a bad DB
+    # cast — found by the authenticated ZAP scan (native uuid columns reject it).
+    admin, _ = await register_admin(client, "admuuid@e.com")
+    r1 = await client.patch("/api/v1/admin/users/not-a-uuid", json={"role": "merchant"}, headers=bearer(admin))
+    assert r1.status_code == 422, r1.text
+    r2 = await client.delete("/api/v1/admin/coupons/not-a-uuid", headers=bearer(admin))
+    assert r2.status_code == 422, r2.text
+
+
+@pytest.mark.asyncio
 async def test_list_users_returns_all(client):
     admin, _ = await register_admin(client, "adm@e.com")
     await register_customer(client, "u1@e.com")
