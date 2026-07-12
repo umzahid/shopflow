@@ -1,0 +1,145 @@
+name: ShopFlow Nightly (E2E + k6 + ZAP)
+
+# Non-blocking hardening suite. Runs on a schedule (and on demand) — never on
+# push/PR — so it cannot gate merges. It brings the full compose stack up and
+# runs the three long/slow suites that the PR pipeline (test.yml) deliberately
+# skips: Playwright E2E, a k6 smoke profile, and ZAP baseline scans.
+on:
+  schedule:
+    - cron: "0 3 * * *"   # 03:00 UTC nightly
+  workflow_dispatch: {}    # manual trigger (Actions → Run workflow)
+
+# One nightly run at a time; a manual run supersedes a queued scheduled one.
+concurrency:
+  group: nightly
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    name: E2E + k6 + ZAP against a live stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      # Rate limits are set high: the full E2E suite and the ZAP scans all come
+      # from a single client IP and would otherwise trip RATE_LIMIT_PUBLIC.
+      - name: Write CI .env for docker compose
+        run: |
+          {
+            echo "APP_ENV=ci"
+            echo "DEBUG=false"
+            echo "POSTGRES_PASSWORD=testpassword"
+            echo "DATABASE_URL=postgresql+asyncpg://shopflow:testpassword@postgres:5432/shopflow"
+            echo "REDIS_PASSWORD=testredis"
+            echo "REDIS_URL=redis://:testredis@redis:6379/0"
+            echo "JWT_SECRET_KEY=ci-test-secret-key-not-for-production-use-64-chars-minimum-xxxx"
+            echo "JWT_ALGORITHM=HS256"
+            echo "JWT_ACCESS_TOKEN_EXPIRE_MINUTES=15"
+            echo "JWT_REFRESH_TOKEN_EXPIRE_DAYS=7"
+            echo "COOKIE_SECURE=false"
+            echo "COOKIE_SAMESITE=lax"
+            echo "COOKIE_DOMAIN="
+            echo 'CORS_ORIGINS=["http://localhost:3000"]'
+            echo "RATE_LIMIT_PUBLIC=1000000/minute"
+            echo "RATE_LIMIT_AUTHENTICATED=1000000/minute"
+            echo "GRAFANA_PASSWORD=admin"
+            echo "AWS_REGION=us-east-1"
+            echo "AWS_ACCESS_KEY_ID="
+            echo "AWS_SECRET_ACCESS_KEY="
+            echo "S3_BUCKET_NAME=shopflow-test"
+            echo "ANTHROPIC_API_KEY="
+            echo "NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1"
+          } > .env
+
+      - name: Build & start the full stack
+        run: |
+          docker compose up -d --build
+          echo "Waiting for backend health..."
+          timeout 180 bash -c 'until curl -sf http://localhost:8000/health; do sleep 3; done'
+          echo "Waiting for frontend health..."
+          timeout 180 bash -c 'until curl -sf http://localhost:3000/api/health; do sleep 3; done'
+
+      - name: Run Alembic migrations
+        run: docker compose exec -T backend alembic upgrade head
+
+      # ── E2E (Playwright) ─────────────────────────────────────────────────
+      - name: Install E2E deps + browser
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Playwright E2E
+        id: e2e
+        continue-on-error: true
+        working-directory: e2e
+        env:
+          CI: "true"
+          E2E_BASE_URL: http://localhost:3000
+          E2E_API_URL: http://localhost:8000/api/v1
+        # --workers=2: the config notes unbounded parallelism overloads the
+        # dev-mode stack (single-worker Next + reload-mode API) past ~30 tests.
+        run: npx playwright test --workers=2
+
+      # ── k6 smoke ─────────────────────────────────────────────────────────
+      - name: k6 smoke
+        id: k6
+        continue-on-error: true
+        run: ./perf/run.sh smoke
+
+      # ── ZAP baseline (frontend + API) ────────────────────────────────────
+      - name: ZAP baseline scans
+        id: zap
+        continue-on-error: true
+        run: |
+          ./security/zap-scan.sh frontend
+          ./security/zap-scan.sh api
+
+      # ── Artifacts ────────────────────────────────────────────────────────
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          if-no-files-found: ignore
+
+      - name: Upload k6 + ZAP results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-and-security-reports
+          path: |
+            perf/results/
+            security/reports/
+          if-no-files-found: ignore
+
+      - name: Backend logs on failure
+        if: failure() || steps.e2e.outcome == 'failure' || steps.k6.outcome == 'failure' || steps.zap.outcome == 'failure'
+        run: docker compose logs --tail 200 backend frontend
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
+      # Surface suite failures as a red job (visible in the Actions tab) without
+      # blocking any PR — this workflow never runs on push/PR.
+      - name: Fail if any suite failed
+        if: always()
+        run: |
+          echo "E2E=${{ steps.e2e.outcome }} k6=${{ steps.k6.outcome }} ZAP=${{ steps.zap.outcome }}"
+          if [ "${{ steps.e2e.outcome }}" = "failure" ] || \
+             [ "${{ steps.k6.outcome }}" = "failure" ] || \
+             [ "${{ steps.zap.outcome }}" = "failure" ]; then
+            echo "::error::One or more nightly suites failed — see logs/artifacts above."
+            exit 1
+          fi
+          echo "All nightly suites passed."

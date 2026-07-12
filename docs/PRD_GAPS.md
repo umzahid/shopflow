@@ -184,9 +184,14 @@
   Docs: docs/observability-tracing.md.)*
 - **Commit:** `feat(obs): OpenTelemetry tracing → Jaeger (PRD +10 bonus)`
 
-### GAP-13 · Scheduled CI runs for E2E/k6/ZAP — Domain 6 (optional hardening)
-- [ ] Nightly `schedule:` workflow running Playwright suite + k6 smoke + ZAP baseline
+### GAP-13 · Scheduled CI runs for E2E/k6/ZAP — Domain 6 (optional hardening) ✅ DONE 2026-07-13
+- [x] Nightly `schedule:` workflow running Playwright suite + k6 smoke + ZAP baseline
   against a compose-up stack. Keep it non-blocking (separate workflow).
+  *(`.github/workflows/nightly.yml`: schedule 03:00 UTC + workflow_dispatch, never
+  push/PR so it can't gate merges. Brings the full stack up, runs the 3 suites each
+  continue-on-error with a final gate. actionlint clean; components individually
+  verified this session. NOT yet executed on GitHub — needs a push + a scheduled/
+  dispatch run to confirm end-to-end.)*
 - **Commit:** `ci: nightly e2e + k6 + zap workflow`
 
 ### GAP-14 · Copilot response streaming — Domain 5 (optional)
