@@ -171,12 +171,17 @@
   path ids on 4 endpoints, 500-on-NUL-byte in search. Triage in docs/zap-findings.md.)*
 - **Commit:** `security(zap): authenticated scan of merchant/admin surface`
 
-### GAP-12 · OpenTelemetry tracing — Domain 3 bonus (+10 pts)
-- [ ] **What:** unclaimed bonus: OTel tracing exported to Jaeger or Grafana Tempo.
+### GAP-12 · OpenTelemetry tracing — Domain 3 bonus (+10 pts) ✅ DONE 2026-07-13
+- [x] **What:** unclaimed bonus: OTel tracing exported to Jaeger or Grafana Tempo.
 - **How:** backend `opentelemetry-instrumentation-fastapi` + OTLP exporter; Jaeger
   all-in-one in compose; propagate the existing traceId. Frontend optional.
 - **Accept:** a request produces a visible trace in Jaeger UI; docs snippet with
   screenshot/instructions.
+  *(Done: FastAPI + SQLAlchemy instrumented, OTLP/HTTP → Jaeger all-in-one (UI
+  :16686). Opt-in via OTEL_ENABLED (compose sets it; no-op under pytest). Existing
+  X-Request-ID stamped on the span as shopflow.request_id for log↔trace correlation.
+  Verified via Jaeger API: request → 11-span trace with SQL child spans + the id tag.
+  Docs: docs/observability-tracing.md.)*
 - **Commit:** `feat(obs): OpenTelemetry tracing → Jaeger (PRD +10 bonus)`
 
 ### GAP-13 · Scheduled CI runs for E2E/k6/ZAP — Domain 6 (optional hardening)

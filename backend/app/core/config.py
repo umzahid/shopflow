@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
 
+    # OpenTelemetry tracing (opt-in; enabled in docker-compose alongside Jaeger).
+    # Off by default so local/unit runs need no collector. Exported over OTLP/HTTP.
+    OTEL_ENABLED: bool = False
+    OTEL_EXPORTER_OTLP_ENDPOINT: str = "http://jaeger:4318"
+    OTEL_SERVICE_NAME: str = "shopflow-backend"
+
     # Rate limiting
     RATE_LIMIT_ENABLED: bool = True  # disabled in the test suite (see conftest)
     RATE_LIMIT_PUBLIC: str = "100/minute"

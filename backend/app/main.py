@@ -5,6 +5,7 @@ import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from opentelemetry import trace
 from fastapi.exceptions import HTTPException as FastAPIHTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -30,6 +31,7 @@ from app.core.logging import configure_logging, trace_id_var
 from app.core.metrics import instrument_engine, refresh_active_orders_loop
 from app.core.redis import close_redis
 from app.core.security import decode_access_token
+from app.core.tracing import configure_tracing
 
 configure_logging()
 instrument_engine(engine)
@@ -156,6 +158,10 @@ async def security_headers(request: Request, call_next):
 async def request_logging(request: Request, call_next):
     trace_id = request.headers.get("x-request-id") or uuid.uuid4().hex
     token = trace_id_var.set(trace_id)
+    # Propagate our per-request id onto the OTel span so a log line and its
+    # Jaeger trace share an id (no-op when tracing is disabled — the current
+    # span is then non-recording).
+    trace.get_current_span().set_attribute("shopflow.request_id", trace_id)
     start = time.perf_counter()
     try:
         response = await call_next(request)
@@ -228,3 +234,9 @@ app.include_router(merchant.router, prefix="/api/v1")
 app.include_router(admin.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
 app.include_router(webhooks.router, prefix="/api/v1")
+
+
+# OpenTelemetry tracing → Jaeger (opt-in via OTEL_ENABLED). Done last, at
+# import time, so the OTel middleware wraps the full request and is installed
+# before the app starts serving. No-op under pytest / when disabled.
+configure_tracing(app, engine=engine)
