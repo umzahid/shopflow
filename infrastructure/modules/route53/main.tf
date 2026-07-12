@@ -7,6 +7,13 @@ resource "aws_route53_zone" "this" {
 
 # app.<domain> → CloudFront distribution. ALIAS rather than CNAME: queries to
 # alias records are free and the target is an AWS resource with a fixed zone id.
+#
+# NOTE for a real apply: CloudFront only serves a custom host it lists as an
+# alternate domain name, which in turn requires an ACM cert. Set the root
+# `cdn_aliases` (+ `cdn_acm_certificate_arn`) to this same app.<domain> before
+# applying, or Route 53 rejects the ALIAS (InvalidChangeBatch) and CloudFront
+# would 403 the host. Left unwired here because the stack is validated, never
+# applied to real AWS with a real domain (see README "Deviations").
 resource "aws_route53_record" "app" {
   zone_id = aws_route53_zone.this.zone_id
   name    = "app.${var.domain_name}"

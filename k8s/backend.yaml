@@ -6,7 +6,9 @@ metadata:
   labels:
     app.kubernetes.io/name: backend
 spec:
-  replicas: 1
+  # No `replicas` here on purpose: the HorizontalPodAutoscaler below owns the
+  # replica count (min 2). Setting it would reset the Deployment to a fixed
+  # value on every `kubectl apply`, fighting the HPA until its next sync.
   selector:
     matchLabels:
       app.kubernetes.io/name: backend
