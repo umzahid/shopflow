@@ -147,11 +147,15 @@
   deviations. Option (a) is a small BE+FE change; (b) is honest if time-boxed.
 - **Commit:** `feat(products): avg rating on list + ProductCard stars` or `docs: deviation note`
 
-### GAP-10 · a11y specs for detail/merchant/checkout pages — Domain 6 (§6.2)
-- [ ] **What:** axe suite covers 5 pages (`e2e/tests/a11y.spec.ts`); product detail,
+### GAP-10 · a11y specs for detail/merchant/checkout pages — Domain 6 (§6.2) ✅ DONE 2026-07-12
+- [x] **What:** axe suite covers 5 pages (`e2e/tests/a11y.spec.ts`); product detail,
   merchant pages, and checkout are not scanned.
 - **Accept:** axe specs for `/products/[id]`, `/merchant`, `/merchant/products`,
   `/merchant/orders`, `/merchant/analytics`, `/checkout` — 0 serious/critical.
+  *(TC-A6..A11 added — 11/11 green. The initial detail-page scan found real serious
+  violations, fixed in the frontend: role="img" on three bare aria-label star rows
+  [detail reviews, histogram, merchant dashboard] and the gallery tablist's `<li>`
+  wrappers removed so tabs are owned by the tablist.)*
 - **Commit:** `test(a11y): axe coverage for detail, merchant, and checkout pages`
 
 ### GAP-11 · Authenticated ZAP scan — Domain 6 (§6.5)

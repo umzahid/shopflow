@@ -29,6 +29,7 @@ export function RatingHistogramBar({ histogram }: Props) {
           </span>
         </div>
         <div
+          role="img"
           aria-label={`Average rating ${histogram.average.toFixed(1)} of 5`}
           className="flex items-center gap-0.5"
         >

@@ -168,6 +168,7 @@ export default function MerchantDashboardPage() {
                 <li key={r.id} className="flex flex-col gap-1 py-2.5 text-sm">
                   <div className="flex items-center gap-2">
                     <span
+                      role="img"
                       aria-label={`${r.rating} out of 5 stars`}
                       className="font-semibold text-warning"
                     >
