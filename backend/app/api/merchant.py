@@ -10,6 +10,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -450,6 +451,45 @@ async def merchant_copilot(
         tool_calls=[
             ToolCallTrace(tool=c.tool, input=c.input, result=c.result) for c in result.tool_calls
         ],
+    )
+
+
+@router.post("/copilot/stream")
+async def merchant_copilot_stream(
+    body: CopilotRequest,
+    request: Request,
+    current_user: User = Depends(require_role(UserRole.merchant)),
+):
+    """Streaming (SSE) copilot — same read-only analytics as /copilot, but the
+    answer text streams as it's generated for lower perceived latency. Events are
+    JSON per SSE `data:` line: delta | tool | done | error.
+
+    The DB session is opened *inside* the streaming generator rather than via a
+    `get_db` dependency: a yield-dependency's teardown is ordered against the
+    response body and deadlocks under StreamingResponse. The session lives and
+    closes entirely within the stream instead.
+    """
+    question = body.question.strip()
+    if not question:
+        raise _problem(
+            status.HTTP_400_BAD_REQUEST, "Bad Request",
+            "question must not be empty", request.url.path,
+        )
+
+    async def event_stream():
+        # Resolve the session factory at call time so the test suite's patched
+        # AsyncSessionLocal (test DB) is picked up.
+        from app.core.database import AsyncSessionLocal
+
+        async with AsyncSessionLocal() as db:
+            async for event in copilot_svc.answer_question_stream(db, current_user, question):
+                yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        # Disable proxy buffering so deltas reach the browser immediately.
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 

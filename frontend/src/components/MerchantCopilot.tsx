@@ -4,8 +4,7 @@ import { Bot, Send, Sparkles, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
-import { ApiError } from "@/lib/api";
-import { useCopilot } from "@/lib/merchant";
+import { streamCopilot } from "@/lib/merchant";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -51,7 +50,7 @@ export function MerchantCopilot() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const copilot = useCopilot();
+  const [streaming, setStreaming] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   // Restore conversation across page navigation (sessionStorage per PRD).
@@ -71,33 +70,50 @@ export function MerchantCopilot() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messages, open]);
 
-  const ask = (question: string) => {
-    const q = question.trim();
-    if (!q || copilot.isPending) return;
-    setMessages((m) => [...m, { role: "user", content: q }]);
-    setInput("");
-    copilot.mutate(q, {
-      onSuccess: (res) =>
-        setMessages((m) => [
-          ...m,
-          {
-            role: "assistant",
-            content: res.answer,
-            tools: res.tool_calls.map((t) => t.tool),
-          },
-        ]),
-      onError: (e) =>
-        setMessages((m) => [
-          ...m,
-          {
-            role: "assistant",
-            content:
-              e instanceof ApiError
-                ? `Sorry — ${e.problem.detail}`
-                : "Sorry, something went wrong.",
-          },
-        ]),
+  // Append streamed text to the trailing assistant message (the placeholder
+  // pushed when the turn starts is always last while streaming).
+  const appendToLast = (text: string) =>
+    setMessages((m) => {
+      const next = [...m];
+      const last = next[next.length - 1];
+      next[next.length - 1] = { ...last, content: last.content + text };
+      return next;
     });
+
+  const ask = async (question: string) => {
+    const q = question.trim();
+    if (!q || streaming) return;
+    setMessages((m) => [
+      ...m,
+      { role: "user", content: q },
+      { role: "assistant", content: "" },
+    ]);
+    setInput("");
+    setStreaming(true);
+    try {
+      const tools = await streamCopilot(q, appendToLast);
+      setMessages((m) => {
+        const next = [...m];
+        const last = next[next.length - 1];
+        next[next.length - 1] = {
+          ...last,
+          content: last.content || "(no answer)",
+          tools,
+        };
+        return next;
+      });
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : "something went wrong";
+      setMessages((m) => {
+        const next = [...m];
+        const last = next[next.length - 1];
+        // Only overwrite if nothing streamed; otherwise keep the partial answer.
+        if (!last.content) next[next.length - 1] = { ...last, content: `Sorry — ${detail}` };
+        return next;
+      });
+    } finally {
+      setStreaming(false);
+    }
   };
 
   return (
@@ -159,7 +175,11 @@ export function MerchantCopilot() {
                   }`}
                 >
                   <div className="space-y-1 [&_strong]:font-semibold">
-                    {renderMarkdown(m.content)}
+                    {m.content ? (
+                      renderMarkdown(m.content)
+                    ) : (
+                      <span className="animate-pulse text-muted-foreground">Thinking…</span>
+                    )}
                   </div>
                   {m.tools && m.tools.length > 0 && (
                     <p className="mt-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -169,11 +189,6 @@ export function MerchantCopilot() {
                 </div>
               </div>
             ))}
-            {copilot.isPending && (
-              <div className="flex justify-start">
-                <div className="rounded-2xl bg-muted px-3 py-2 text-muted-foreground">Thinking…</div>
-              </div>
-            )}
           </div>
 
           <form
@@ -194,7 +209,7 @@ export function MerchantCopilot() {
               type="submit"
               size="sm"
               variant="primary"
-              loading={copilot.isPending}
+              loading={streaming}
               aria-label="Send"
             >
               <Send className="h-4 w-4" aria-hidden="true" />

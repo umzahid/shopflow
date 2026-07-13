@@ -122,3 +122,75 @@ export async function api<T>(
 
   return data as T;
 }
+
+/**
+ * POST a body and consume a Server-Sent Events response, invoking `onEvent` for
+ * each `data:` JSON payload. Mirrors `api()`'s auth + one-shot 401 refresh, but
+ * streams the body instead of buffering. Resolves when the stream ends.
+ */
+export async function streamSSE(
+  path: string,
+  body: unknown,
+  onEvent: (event: Record<string, unknown>) => void,
+): Promise<void> {
+  const url = `${API_BASE}${path}`;
+
+  const open = (token: string | null): Promise<Response> =>
+    fetch(url, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        Accept: "text/event-stream",
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+
+  let res = await open(useAuth.getState().accessToken);
+  if (res.status === 401) {
+    const refreshed = await refreshToken();
+    if (refreshed) {
+      res = await open(refreshed.access_token);
+    } else {
+      useAuth.getState().clearAuth();
+    }
+  }
+
+  if (!res.ok || !res.body) {
+    const text = await res.text().catch(() => "");
+    const data = text ? JSON.parse(text) : undefined;
+    if (data && typeof data === "object" && "title" in data && "status" in data) {
+      throw new ApiError(data as ProblemDetail);
+    }
+    throw new ApiError({
+      type: "about:blank",
+      title: "Error",
+      status: res.status,
+      detail: res.statusText || "Streaming request failed",
+      instance: path,
+    });
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  // SSE frames are separated by a blank line; a frame may span reads, so buffer.
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let sep: number;
+    while ((sep = buffer.indexOf("\n\n")) !== -1) {
+      const frame = buffer.slice(0, sep);
+      buffer = buffer.slice(sep + 2);
+      const line = frame.split("\n").find((l) => l.startsWith("data:"));
+      if (!line) continue;
+      try {
+        onEvent(JSON.parse(line.slice(5).trim()));
+      } catch {
+        /* ignore malformed frame */
+      }
+    }
+  }
+}

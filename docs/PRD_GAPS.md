@@ -194,9 +194,15 @@
   dispatch run to confirm end-to-end.)*
 - **Commit:** `ci: nightly e2e + k6 + zap workflow`
 
-### GAP-14 · Copilot response streaming — Domain 5 (optional)
-- [ ] SSE streaming for `/merchant/copilot` + incremental rendering in the panel.
+### GAP-14 · Copilot response streaming — Domain 5 (optional) ✅ DONE 2026-07-13
+- [x] SSE streaming for `/merchant/copilot` + incremental rendering in the panel.
   Perceived-latency only; do this last.
+  *(POST /merchant/copilot/stream returns text/event-stream — delta/tool/done/error
+  events; streams each turn via client.messages.stream() inside the existing tool
+  loop. DB session opened inside the generator (a get_db yield-dependency deadlocks
+  under StreamingResponse). Frontend streamSSE reader + incremental bubble render.
+  Verified: 3 backend SSE tests + 2 FE RTL tests, live endpoint serves text/event-stream
+  with correct headers. Non-streaming /copilot kept for back-compat.)*
 
 ## Owner-only (Claude: surface these, don't attempt)
 
