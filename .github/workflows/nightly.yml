@@ -42,10 +42,8 @@ jobs:
       - name: Build & start the full stack
         run: |
           docker compose up -d --build
-          echo "Waiting for backend health..."
-          timeout 180 bash -c 'until curl -sf http://localhost:8000/health; do sleep 3; done'
-          echo "Waiting for frontend health..."
-          timeout 180 bash -c 'until curl -sf http://localhost:3000/api/health; do sleep 3; done'
+          ./scripts/wait-for-health.sh http://localhost:8000/health 180 backend
+          ./scripts/wait-for-health.sh http://localhost:3000/api/health 180 frontend
 
       - name: Run Alembic migrations
         run: docker compose exec -T backend alembic upgrade head

@@ -27,10 +27,7 @@ docker rm -f shopflow-localstack >/dev/null 2>&1 || true
 # last verified token-free community release with everything we need (EC2-mock,
 # S3, CloudWatch, IAM, STS).
 docker run -d --name shopflow-localstack -p 4566:4566 localstack/localstack:3.8 >/dev/null
-for i in $(seq 1 30); do
-  curl -s http://localhost:4566/_localstack/health >/dev/null && break
-  sleep 2
-done
+"$INFRA_DIR/../scripts/wait-for-health.sh" http://localhost:4566/_localstack/health 60 localstack
 
 cleanup() { rm -f "$OVERRIDE_DST"; }
 trap cleanup EXIT

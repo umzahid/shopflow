@@ -250,12 +250,7 @@ jobs:
       - name: Build and start backend + dependencies
         run: |
           docker compose up -d postgres redis backend
-          echo "Waiting for backend to become healthy..."
-          timeout 90 bash -c '
-            until curl -sf http://localhost:8000/health; do
-              sleep 3
-            done
-          '
+          ./scripts/wait-for-health.sh http://localhost:8000/health 90 backend
 
       - name: Run Alembic migrations
         run: docker compose exec -T backend alembic upgrade head

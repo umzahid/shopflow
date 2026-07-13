@@ -57,8 +57,8 @@ case "$TARGET" in
     echo ">> bringing backend up with the scan overlay (rate-limit relief + long JWT TTL)"
     docker compose -f docker-compose.yml -f docker-compose.override.yml \
       -f security/docker-compose.scan.yml up -d backend
-    # Wait for health before seeding/logging in.
-    for _ in $(seq 1 30); do curl -sf "http://localhost:8000/health" >/dev/null 2>&1 && break; sleep 2; done
+    # Wait for health before seeding/logging in (cwd is the repo root — see cd above).
+    scripts/wait-for-health.sh http://localhost:8000/health 60 backend
 
     echo ">> provisioning the scan admin (out-of-band; admin is not self-registerable)"
     docker cp security/seed_scan_admin.py "$BACKEND:/app/security_seed_scan_admin.py"
