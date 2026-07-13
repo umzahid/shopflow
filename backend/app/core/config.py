@@ -2,7 +2,11 @@ from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
-_PROD_ENVS = {"production", "prod"}
+# Environments where the admin self-registration escape hatch may be enabled.
+# The guard below is fail-closed: anything NOT in this set — production, staging,
+# or any unrecognized/misspelled/blank label — is treated as production-like and
+# refuses to start with the flag on.
+_NONPROD_ENVS = {"development", "dev", "local", "test", "testing", "ci", "e2e", "localstack"}
 
 
 class Settings(BaseSettings):
@@ -47,7 +51,8 @@ class Settings(BaseSettings):
     # This exists ONLY so the e2e suite can provision an admin — the Playwright
     # container can't reach Postgres to promote one the way the backend
     # integration helper does. MUST stay False in any real environment; the
-    # validator below refuses to start if it's True while APP_ENV is production.
+    # validator below refuses to start with it True unless APP_ENV names a known
+    # non-production environment (fail-closed — see _NONPROD_ENVS).
     ALLOW_ADMIN_SELF_REGISTRATION: bool = False
 
     # Rate limiting
@@ -76,14 +81,19 @@ class Settings(BaseSettings):
     NARRATIVE_MODEL: str = "claude-opus-4-8"
 
     @model_validator(mode="after")
-    def _forbid_admin_self_registration_in_prod(self) -> "Settings":
+    def _forbid_admin_self_registration_outside_nonprod(self) -> "Settings":
         # Fail-closed: the admin self-registration escape hatch is a deliberate
-        # privilege-escalation path for tests only. If it's ever enabled in a
-        # production environment, refuse to start rather than expose it.
-        if self.ALLOW_ADMIN_SELF_REGISTRATION and self.APP_ENV.lower() in _PROD_ENVS:
+        # privilege-escalation path for tests/CI only. Permit it ONLY in a known
+        # non-production environment; treat every other APP_ENV (production,
+        # staging, or any unrecognized label) as production-like and refuse to
+        # start rather than expose anonymous admin registration. Allowlisting
+        # non-prod — rather than denylisting prod — means a new prod-like label
+        # fails safe instead of silently opening the hatch.
+        if self.ALLOW_ADMIN_SELF_REGISTRATION and self.APP_ENV.strip().lower() not in _NONPROD_ENVS:
             raise ValueError(
-                "ALLOW_ADMIN_SELF_REGISTRATION must be False when APP_ENV is "
-                "production — it is a test/CI-only privilege-escalation path."
+                "ALLOW_ADMIN_SELF_REGISTRATION may only be enabled in a non-production "
+                f"environment ({sorted(_NONPROD_ENVS)}); APP_ENV={self.APP_ENV!r} is "
+                "treated as production-like."
             )
         return self
 

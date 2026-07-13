@@ -43,13 +43,23 @@ def test_admin_self_registration_defaults_false():
     assert Settings.model_fields["ALLOW_ADMIN_SELF_REGISTRATION"].default is False
 
 
-def test_admin_self_registration_allowed_outside_production():
-    s = Settings(_env_file=None, APP_ENV="ci", ALLOW_ADMIN_SELF_REGISTRATION=True, **_REQUIRED)
+@pytest.mark.parametrize(
+    "env",
+    ["development", "dev", "local", "test", "testing", "ci", "e2e", "localstack", "CI", " ci "],
+)
+def test_admin_self_registration_allowed_in_known_nonprod(env):
+    s = Settings(_env_file=None, APP_ENV=env, ALLOW_ADMIN_SELF_REGISTRATION=True, **_REQUIRED)
     assert s.ALLOW_ADMIN_SELF_REGISTRATION is True
 
 
-def test_admin_self_registration_forbidden_in_production():
-    # Fail-closed guardrail: the test/CI escape hatch must never ship enabled.
-    # The app refuses to construct its settings (i.e. refuses to start) instead.
+@pytest.mark.parametrize(
+    "env",
+    # production, staging, and ANY unrecognized/misspelled/blank label are all
+    # treated as production-like — the guard is fail-closed, not a prod denylist.
+    ["production", "prod", "staging", "prod-us", "production-us", "live", "PRODUCTION", " production ", "", "wat"],
+)
+def test_admin_self_registration_forbidden_outside_known_nonprod(env):
+    # The app refuses to construct its settings (i.e. refuses to start) rather
+    # than expose anonymous admin registration in a production-like environment.
     with pytest.raises(ValidationError):
-        Settings(_env_file=None, APP_ENV="production", ALLOW_ADMIN_SELF_REGISTRATION=True, **_REQUIRED)
+        Settings(_env_file=None, APP_ENV=env, ALLOW_ADMIN_SELF_REGISTRATION=True, **_REQUIRED)

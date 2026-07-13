@@ -28,8 +28,13 @@ async def test_register_merchant_role_allowed(client):
 
 
 @pytest.mark.asyncio
-async def test_register_cannot_self_assign_admin(client):
+async def test_register_cannot_self_assign_admin(client, monkeypatch):
     # Privilege escalation guard: the public endpoint must never mint an admin.
+    # Force the escape-hatch flag off so this asserts the default-deny path
+    # regardless of ambient config (local .env / ci.env may enable it for e2e).
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "ALLOW_ADMIN_SELF_REGISTRATION", False)
     res = await client.post("/api/v1/auth/register", json={
         "email": "sneaky-admin@shopflow.io",
         "password": "Password123",

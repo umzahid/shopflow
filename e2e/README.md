@@ -43,8 +43,10 @@ admin via `POST /auth/register` (the Playwright container can't reach Postgres
 to promote one). Admin self-registration is blocked by default, so the stack
 under test must run with `ALLOW_ADMIN_SELF_REGISTRATION=true` in its `.env`. CI
 sets this via `.github/workflows/ci.env`; for local runs add the line to `.env`
-before `docker compose up`. The flag is fail-closed — the backend refuses to
-start with it enabled when `APP_ENV=production`.
+before `docker compose up`. The flag is fail-closed — the backend only accepts
+it when `APP_ENV` names a known non-production env (`development`, `ci`, `test`,
+…) and refuses to start otherwise (so `production`, `staging`, or any unknown
+label can never run with it enabled).
 
 ## Test cases (22 — all passing)
 
