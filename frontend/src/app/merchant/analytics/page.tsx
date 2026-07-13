@@ -8,6 +8,7 @@ import { Select } from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 import { useMerchantDashboard, useRevenueSummary } from "@/lib/merchant";
 import { SAMPLE_ORDERS_BY_REGION } from "@/lib/mockGeo";
+import { formatPrice as money, lastNDays } from "@/lib/utils";
 import type { OrderStatus } from "@/types/api";
 
 const RANGES = [
@@ -15,15 +16,6 @@ const RANGES = [
   { label: "Last 90 days", value: "90" },
   { label: "Last 180 days", value: "180" },
 ];
-
-function money(v: string | number): string {
-  const n = typeof v === "string" ? Number(v) : v;
-  return n.toLocaleString(undefined, { style: "currency", currency: "USD" });
-}
-
-function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
 
 // Fulfilment funnel: each stage counts orders that reached at least that stage.
 // Delivered orders also passed through shipped and confirmed, so the funnel is
@@ -46,10 +38,8 @@ export default function AnalyticsPage() {
   const [range, setRange] = useState("90");
   const dash = useMerchantDashboard();
 
-  const today = new Date();
-  const start = new Date(today);
-  start.setDate(start.getDate() - (Number(range) - 1));
-  const revenue = useRevenueSummary(isoDate(start), isoDate(today));
+  const { start, end } = lastNDays(Number(range));
+  const revenue = useRevenueSummary(start, end);
 
   const funnel = dash.data ? funnelFrom(dash.data.orders_by_status) : [];
   const funnelMax = Math.max(1, ...funnel.map((f) => f.value));

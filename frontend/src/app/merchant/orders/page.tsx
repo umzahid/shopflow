@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/SkeletonLoader";
 import { useToast } from "@/components/ui/Toast";
 import { ApiError } from "@/lib/api";
 import { useMerchantOrders, useUpdateOrderStatus } from "@/lib/merchant";
+import { formatPrice as money } from "@/lib/utils";
 import type { Order, OrderStatus } from "@/types/api";
 
 const STATUS_FILTERS = [
@@ -42,10 +43,6 @@ const NEXT_STATUS: Record<OrderStatus, OrderStatus[]> = {
   delivered: [],
   cancelled: [],
 };
-
-function money(v: string): string {
-  return Number(v).toLocaleString(undefined, { style: "currency", currency: "USD" });
-}
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
