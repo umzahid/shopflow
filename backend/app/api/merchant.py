@@ -475,6 +475,15 @@ async def merchant_copilot_stream(
             status.HTTP_400_BAD_REQUEST, "Bad Request",
             "question must not be empty", request.url.path,
         )
+    # Fail with a real 503 before the SSE body starts if the copilot isn't
+    # configured — matching the blocking endpoint. Errors that only surface once
+    # streaming has begun (rate limit, mid-run failure) can't change the status
+    # and are delivered as terminal `error` events instead.
+    if not copilot_svc.available():
+        raise _problem(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "Service Unavailable",
+            "The copilot is not configured on this deployment.", request.url.path,
+        )
 
     async def event_stream():
         # Resolve the session factory at call time so the test suite's patched
@@ -484,6 +493,9 @@ async def merchant_copilot_stream(
         async with AsyncSessionLocal() as db:
             async for event in copilot_svc.answer_question_stream(db, current_user, question):
                 yield f"data: {json.dumps(event)}\n\n"
+            # Parity with get_db's auto-commit contract (tools are read-only
+            # today, but the shared loop may gain a write tool later).
+            await db.commit()
 
     return StreamingResponse(
         event_stream(),

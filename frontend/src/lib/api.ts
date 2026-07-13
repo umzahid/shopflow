@@ -159,7 +159,14 @@ export async function streamSSE(
 
   if (!res.ok || !res.body) {
     const text = await res.text().catch(() => "");
-    const data = text ? JSON.parse(text) : undefined;
+    // The error body may not be JSON (e.g. an HTML 502 from a proxy) — don't
+    // let a parse failure mask the real status.
+    let data: unknown;
+    try {
+      data = text ? JSON.parse(text) : undefined;
+    } catch {
+      data = undefined;
+    }
     if (data && typeof data === "object" && "title" in data && "status" in data) {
       throw new ApiError(data as ProblemDetail);
     }
@@ -176,21 +183,30 @@ export async function streamSSE(
   const decoder = new TextDecoder();
   let buffer = "";
   // SSE frames are separated by a blank line; a frame may span reads, so buffer.
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let sep: number;
-    while ((sep = buffer.indexOf("\n\n")) !== -1) {
-      const frame = buffer.slice(0, sep);
-      buffer = buffer.slice(sep + 2);
-      const line = frame.split("\n").find((l) => l.startsWith("data:"));
-      if (!line) continue;
-      try {
-        onEvent(JSON.parse(line.slice(5).trim()));
-      } catch {
-        /* ignore malformed frame */
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let sep: number;
+      while ((sep = buffer.indexOf("\n\n")) !== -1) {
+        const frame = buffer.slice(0, sep);
+        buffer = buffer.slice(sep + 2);
+        const line = frame.split("\n").find((l) => l.startsWith("data:"));
+        if (!line) continue;
+        // Parse and dispatch are separate: a malformed frame is skipped, but an
+        // error thrown by onEvent (e.g. a backend `error` event) must propagate.
+        let payload: Record<string, unknown>;
+        try {
+          payload = JSON.parse(line.slice(5).trim());
+        } catch {
+          continue; // ignore malformed frame
+        }
+        onEvent(payload);
       }
     }
+  } finally {
+    // Release the connection on any exit, including an onEvent throw.
+    reader.cancel().catch(() => {});
   }
 }

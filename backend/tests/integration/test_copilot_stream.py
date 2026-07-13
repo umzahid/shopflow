@@ -60,6 +60,36 @@ async def test_copilot_stream_emits_deltas_and_done(client):
 
 
 @pytest.mark.asyncio
+async def test_copilot_stream_503_when_unconfigured(client):
+    # No stream override + no key/fake in the test env → a real 503 before the
+    # SSE body starts (parity with the blocking endpoint), not a 200 error frame.
+    set_llm_stream(None)
+    mtoken, _ = await register_merchant(client, "m-cps-503@e.com")
+    res = await client.post(
+        "/api/v1/merchant/copilot/stream", json={"question": "hi"}, headers=bearer(mtoken)
+    )
+    assert res.status_code == 503
+    assert res.json()["status"] == 503
+
+
+@pytest.mark.asyncio
+async def test_copilot_stream_reconciles_final_message_text(client):
+    # A turn that streams no deltas but returns text in the final message must
+    # still surface that text (matches the blocking path).
+    mtoken, _ = await register_merchant(client, "m-cps-recon@e.com")
+    set_llm_stream(_stream_script(
+        ([], LLMResponse("end_turn", [LLMBlock(type="text", text="Reconciled answer.")])),
+    ))
+    res = await client.post(
+        "/api/v1/merchant/copilot/stream", json={"question": "hi"}, headers=bearer(mtoken)
+    )
+    assert res.status_code == 200
+    events = _parse_sse(res.text)
+    assert "".join(e["text"] for e in events if e["type"] == "delta") == "Reconciled answer."
+    assert events[-1]["type"] == "done"
+
+
+@pytest.mark.asyncio
 async def test_copilot_stream_reports_tool_calls(client):
     mtoken, _ = await register_merchant(client, "m-cps-tool@e.com")
     set_llm_stream(_stream_script(

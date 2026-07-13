@@ -34,6 +34,12 @@ SYSTEM_PROMPT = (
     "to this merchant's store analytics. Keep answers concise."
 )
 
+# Shared by the blocking and streaming loops so they can't drift apart.
+REFUSAL_MESSAGE = "I'm sorry, I can't help with that request."
+EXHAUSTED_MESSAGE = (
+    "I wasn't able to finish answering that. Please try a more specific question."
+)
+
 
 @dataclass
 class LLMBlock:
@@ -184,7 +190,7 @@ async def answer_question(db: AsyncSession, merchant: User, question: str) -> Co
         response = await turn(messages, TOOL_DEFS)
 
         if response.stop_reason == "refusal":
-            answer_text = "I'm sorry, I can't help with that request."
+            answer_text = REFUSAL_MESSAGE
             break
 
         text_parts = [b.text for b in response.content if b.type == "text" and b.text]
@@ -198,9 +204,7 @@ async def answer_question(db: AsyncSession, merchant: User, question: str) -> Co
         tool_results = await _dispatch_tool_uses(db, merchant, tool_uses, trace)
         messages.append({"role": "user", "content": tool_results})
     else:
-        answer_text = answer_text or (
-            "I wasn't able to finish answering that. Please try a more specific question."
-        )
+        answer_text = answer_text or EXHAUSTED_MESSAGE
 
     return CopilotAnswer(answer=answer_text, tool_calls=trace)
 
@@ -265,6 +269,18 @@ def _current_llm_stream() -> LLMStreamTurn:
     return _anthropic_stream_turn
 
 
+def available() -> bool:
+    """Whether the copilot can serve a request (real key, fake toggle, or a test
+    override). Lets the streaming endpoint return a proper 503 *before* it starts
+    the SSE body, rather than only as an in-stream error event."""
+    return (
+        _llm_override is not None
+        or _llm_stream_override is not None
+        or os.getenv("SHOPFLOW_FAKE_COPILOT") == "1"
+        or bool(settings.ANTHROPIC_API_KEY)
+    )
+
+
 async def answer_question_stream(db: AsyncSession, merchant: User, question: str):
     """Async generator of SSE-ready event dicts:
       {"type": "delta", "text": ...}   incremental answer text
@@ -275,14 +291,14 @@ async def answer_question_stream(db: AsyncSession, merchant: User, question: str
     stream_turn = _current_llm_stream()
     messages: list = [{"role": "user", "content": question}]
     trace: list[ToolCall] = []
-    streamed_any = False
 
     try:
         for _ in range(settings.COPILOT_MAX_ITERATIONS):
             final: LLMResponse | None = None
+            turn_text = ""
             async for kind, payload in stream_turn(messages, TOOL_DEFS):
                 if kind == "delta" and payload:
-                    streamed_any = True
+                    turn_text += payload
                     yield {"type": "delta", "text": payload}
                 elif kind == "final":
                     final = payload
@@ -292,10 +308,19 @@ async def answer_question_stream(db: AsyncSession, merchant: User, question: str
                 return
 
             if final.stop_reason == "refusal":
-                yield {"type": "delta", "text": "I'm sorry, I can't help with that request."}
+                yield {"type": "delta", "text": REFUSAL_MESSAGE}
                 break
 
             if final.stop_reason != "tool_use":
+                # Reconcile: if this terminal turn produced no streamed text (e.g.
+                # the model returned text only in the final message), fall back to
+                # the final message's text blocks — matching the blocking path.
+                if not turn_text.strip():
+                    text = "\n".join(
+                        b.text for b in final.content if b.type == "text" and b.text
+                    ).strip()
+                    if text:
+                        yield {"type": "delta", "text": text}
                 break
 
             messages.append({"role": "assistant", "content": final.content})
@@ -305,10 +330,10 @@ async def answer_question_stream(db: AsyncSession, merchant: User, question: str
             tool_results = await _dispatch_tool_uses(db, merchant, tool_uses, trace)
             messages.append({"role": "user", "content": tool_results})
         else:
-            if not streamed_any:
-                yield {"type": "delta", "text": (
-                    "I wasn't able to finish answering that. Please try a more specific question."
-                )}
+            # Loop exhausted without a terminal answer — always tell the user,
+            # even if partial preamble text streamed on an earlier turn (parity
+            # with the blocking path, which always returns this on exhaustion).
+            yield {"type": "delta", "text": EXHAUSTED_MESSAGE}
 
         yield {"type": "done", "tool_calls": [c.tool for c in trace]}
     except CopilotError as e:
