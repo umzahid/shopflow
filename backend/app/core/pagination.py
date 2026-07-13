@@ -20,28 +20,50 @@ MAX_PAGE_SIZE = 100
 T = TypeVar("T")
 
 
-def encode_cursor(created_at: datetime, id_: str) -> str:
-    raw = f"{created_at.isoformat()}|{id_}".encode()
-    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+def bad_cursor(instance: str = "") -> HTTPException:
+    """RFC 7807 400 for a malformed cursor — shared by every cursor scheme."""
+    return HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail={
+            "type": "https://shopflow.io/errors/bad-request",
+            "title": "Bad Request",
+            "status": 400,
+            "detail": "Invalid pagination cursor",
+            "instance": instance,
+        },
+    )
 
 
-def decode_cursor(cursor: str) -> tuple[datetime, str]:
+def encode_cursor_parts(*parts: str) -> str:
+    """Opaque base64 of `part|part|...` — the low-level codec every cursor
+    scheme shares. Callers stringify their own values before encoding."""
+    return base64.urlsafe_b64encode("|".join(parts).encode()).decode().rstrip("=")
+
+
+def decode_cursor_parts(cursor: str, count: int, *, instance: str = "") -> list[str]:
+    """Inverse of encode_cursor_parts; raises bad_cursor on a malformed cursor.
+    Returns exactly `count` string parts; callers convert to their own types."""
     try:
         padding = "=" * (-len(cursor) % 4)
         raw = base64.urlsafe_b64decode(cursor + padding).decode()
-        created_at_str, id_ = raw.split("|", 1)
+    except (binascii.Error, UnicodeDecodeError) as e:
+        raise bad_cursor(instance) from e
+    parts = raw.split("|", count - 1)
+    if len(parts) != count:
+        raise bad_cursor(instance)
+    return parts
+
+
+def encode_cursor(created_at: datetime, id_: str) -> str:
+    return encode_cursor_parts(created_at.isoformat(), id_)
+
+
+def decode_cursor(cursor: str) -> tuple[datetime, str]:
+    created_at_str, id_ = decode_cursor_parts(cursor, 2)
+    try:
         return datetime.fromisoformat(created_at_str), id_
-    except (ValueError, binascii.Error, UnicodeDecodeError) as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "type": "https://shopflow.io/errors/bad-request",
-                "title": "Bad Request",
-                "status": 400,
-                "detail": "Invalid pagination cursor",
-                "instance": "",
-            },
-        ) from e
+    except ValueError as e:
+        raise bad_cursor() from e
 
 
 def apply_cursor(
