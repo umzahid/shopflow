@@ -25,7 +25,7 @@ from app.models.models import User, UserRole
 # NB: a real (non special-use) TLD — Pydantic's EmailStr rejects .local/.test,
 # which would then 422 at login even though the row inserts fine here.
 EMAIL = os.environ.get("ZAP_ADMIN_EMAIL", "zap-scan-admin@e.com")
-PASSWORD = os.environ.get("ZAP_ADMIN_PASSWORD", "Zap-Sc4n-Admin!123")
+PASSWORD = os.environ.get("ZAP_ADMIN_PASSWORD", "Zap-Sc4n-Admin!123")  # pragma: allowlist secret — local scan-only dummy
 
 
 async def main() -> None:
