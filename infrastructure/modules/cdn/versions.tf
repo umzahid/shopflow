@@ -1,9 +1,9 @@
+# Provider source only — the root module (../../versions.tf) owns the version
+# pins and required_version, so a bump is a one-file change.
 terraform {
-  required_version = ">= 1.5"
   required_providers {
     aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.60"
+      source = "hashicorp/aws"
     }
   }
 }
