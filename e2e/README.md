@@ -38,6 +38,14 @@ npm run report                        # open the HTML report
 Env overrides: `E2E_BASE_URL` (default `http://localhost:3000`),
 `E2E_API_URL` (default `http://localhost:8000/api/v1`).
 
+**Backend flag required by the coupon spec:** `coupon.spec.ts` provisions an
+admin via `POST /auth/register` (the Playwright container can't reach Postgres
+to promote one). Admin self-registration is blocked by default, so the stack
+under test must run with `ALLOW_ADMIN_SELF_REGISTRATION=true` in its `.env`. CI
+sets this via `.github/workflows/ci.env`; for local runs add the line to `.env`
+before `docker compose up`. The flag is fail-closed — the backend refuses to
+start with it enabled when `APP_ENV=production`.
+
 ## Test cases (22 — all passing)
 
 | ID | Case | Steps | Expected |

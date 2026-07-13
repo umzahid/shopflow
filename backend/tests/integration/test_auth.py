@@ -42,6 +42,25 @@ async def test_register_cannot_self_assign_admin(client):
 
 
 @pytest.mark.asyncio
+async def test_register_admin_allowed_when_flag_enabled(client, monkeypatch):
+    # Test/CI escape hatch: with ALLOW_ADMIN_SELF_REGISTRATION on, /register may
+    # mint an admin. This exists only so the e2e suite can provision an admin —
+    # the Playwright container has no DB access to promote one the way the
+    # backend integration helper does. The prod-startup guard (test_config)
+    # ensures this can never be True in a real environment.
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "ALLOW_ADMIN_SELF_REGISTRATION", True)
+    res = await client.post("/api/v1/auth/register", json={
+        "email": "ci-provisioned-admin@shopflow.io",
+        "password": "Password123",
+        "role": "admin",
+    })
+    assert res.status_code == 201, res.text
+    assert res.json()["user"]["role"] == "admin"
+
+
+@pytest.mark.asyncio
 async def test_register_duplicate_email(client):
     payload = {"email": "dup@shopflow.io", "password": "Password123"}
     await client.post("/api/v1/auth/register", json=payload)
