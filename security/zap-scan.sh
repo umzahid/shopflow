@@ -52,7 +52,7 @@ case "$TARGET" in
     API="http://localhost:8000/api/v1"
     BACKEND="${ZAP_BACKEND_CONTAINER:-shopflow-backend-1}"
     export ZAP_ADMIN_EMAIL="zap-scan-admin@e.com"
-    export ZAP_ADMIN_PASSWORD="Zap-Sc4n-Admin!123"
+    export ZAP_ADMIN_PASSWORD="Zap-Sc4n-Admin!123"  # pragma: allowlist secret — local scan-only dummy
 
     echo ">> bringing backend up with the scan overlay (rate-limit relief + long JWT TTL)"
     docker compose -f docker-compose.yml -f docker-compose.override.yml \
