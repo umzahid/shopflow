@@ -4,7 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    # split/** so stacked PRs (base = an earlier PR's branch) still get CI
+    branches: [main, "split/**"]
 
 jobs:
   # ── 1. Backend Lint ────────────────────────────────────────────────────────
