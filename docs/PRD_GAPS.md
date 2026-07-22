@@ -114,64 +114,95 @@
   showing a non-skipped, non-soft-failed step).
 - **Commit:** `ci(security): detect-secrets as a hard gate with audited baseline`
 
-### GAP-08 · Terraform quick wins — Domain 4 (§4.2/§4.3)
-- [ ] 8a. **Route53 module** (10th component): hosted zone + A/ALIAS records for
+### GAP-08 · Terraform quick wins — Domain 4 (§4.2/§4.3) ✅ DONE 2026-07-11
+- [x] 8a. **Route53 module** (10th component): hosted zone + A/ALIAS records for
   `app.` / `api.` (mock domain fine per PRD). ~50 lines; wire into root; `terraform validate`.
-- [ ] 8b. **HPA maxReplicas 3 → 10** (`k8s/backend.yaml:105`; PRD wants 2-10). Re-run
-  kubeconform.
-- [ ] 8c. **Wire the spot toggle**: `node_capacity_type` exists in
+  *(app = ALIAS→CloudFront; api = A→TEST-NET-3 placeholder until the ingress ALB exists.)*
+- [x] 8b. **HPA maxReplicas 3 → 10** (`k8s/backend.yaml:105`; PRD wants 2-10). Re-run
+  kubeconform. *(minReplicas also 1→2 to match the PRD's 2-10 range.)*
+- [x] 8c. **Wire the spot toggle**: `node_capacity_type` exists in
   `modules/compute/variables.tf` but is never passed from `main.tf` nor set in
   `environments/staging.tfvars` (set staging to SPOT).
-- [ ] 8d. **Activate remote state**: rename `backend.tf.example` → `backend.tf`
+- [x] 8d. **Activate remote state**: rename `backend.tf.example` → `backend.tf`
   behind a documented flag/comment (do NOT break local `terraform validate` — keep
-  `-backend=false` in CI/docs if needed).
-- [ ] 8e. **CDN-module S3 lifecycle**: noncurrent versions currently expire at 30d;
-  align with the storage module's IA@30d → Glacier@90d tiering.
+  `-backend=false` in CI/docs if needed). *(LocalStack run.sh keeps working via a
+  `backend "local" {}` override — init proven to select the local backend.)*
+- [x] 8e. **CDN-module S3 lifecycle**: noncurrent versions currently expire at 30d;
+  align with the storage module's IA@30d → Glacier@90d tiering. *(Tier IA@30 →
+  Glacier@90, expire@365; current objects stay STANDARD — CloudFront can't serve Glacier.)*
 - **Verify:** `terraform -chdir=infrastructure validate` clean (docker hashicorp/terraform
   image is the established runner); `kubeconform -strict k8s/`.
 - **Commit:** `feat(infra): route53 module, HPA 2-10, spot staging, remote state, lifecycle alignment`
 
 ## P3 — polish and bonuses
 
-### GAP-09 · ProductCard rating stars — Domain 2 fine print (§2.4)
-- [ ] **What:** PRD's ProductCard lists "rating stars"; the card renders a hardcoded
+### GAP-09 · ProductCard rating stars — Domain 2 fine print (§2.4) ✅ DONE 2026-07-11
+- [x] **What:** PRD's ProductCard lists "rating stars"; the card renders a hardcoded
   "—"/"New listing" placeholder (no rating prop; list API carries no avg rating).
+  *(Closed via option (a): `avg_rating` on the list response — one aggregate over the
+  page's ids — + 5-star row on the card matching the detail-page idiom; unrated
+  products keep the "New listing" placeholder.)*
 - **How (choose one):** (a) add `avg_rating` to the product list response (subquery,
   same shape the detail page uses) and render stars; or (b) add one line to README
   deviations. Option (a) is a small BE+FE change; (b) is honest if time-boxed.
 - **Commit:** `feat(products): avg rating on list + ProductCard stars` or `docs: deviation note`
 
-### GAP-10 · a11y specs for detail/merchant/checkout pages — Domain 6 (§6.2)
-- [ ] **What:** axe suite covers 5 pages (`e2e/tests/a11y.spec.ts`); product detail,
+### GAP-10 · a11y specs for detail/merchant/checkout pages — Domain 6 (§6.2) ✅ DONE 2026-07-12
+- [x] **What:** axe suite covers 5 pages (`e2e/tests/a11y.spec.ts`); product detail,
   merchant pages, and checkout are not scanned.
 - **Accept:** axe specs for `/products/[id]`, `/merchant`, `/merchant/products`,
   `/merchant/orders`, `/merchant/analytics`, `/checkout` — 0 serious/critical.
+  *(TC-A6..A11 added — 11/11 green. The initial detail-page scan found real serious
+  violations, fixed in the frontend: role="img" on three bare aria-label star rows
+  [detail reviews, histogram, merchant dashboard] and the gallery tablist's `<li>`
+  wrappers removed so tabs are owned by the tablist.)*
 - **Commit:** `test(a11y): axe coverage for detail, merchant, and checkout pages`
 
-### GAP-11 · Authenticated ZAP scan — Domain 6 (§6.5)
-- [ ] **What:** current ZAP scans are unauthenticated (`security/zap-scan.sh:29-30`);
+### GAP-11 · Authenticated ZAP scan — Domain 6 (§6.5) ✅ DONE 2026-07-13
+- [x] **What:** current ZAP scans are unauthenticated (`security/zap-scan.sh:29-30`);
   merchant/admin surface (IDOR, priv-esc, copilot isolation boundary) unscanned.
 - **How:** extend `zap-scan.sh` with a session-token context (login via API, pass
   Bearer header); triage findings into `docs/zap-findings.md`.
 - **Accept:** scan ran against `/merchant/*` + `/admin/*`; 0 High; findings triaged.
+  *(`security/zap-scan.sh authed`: per-role Bearer via a ZAP hook, merchant+admin
+  passes reaching 2xx on protected routes. 0 real High — the one SQLi flag is a
+  verified false positive (echo-back fools the boolean heuristic; ORM-parameterized).
+  Found + fixed 3 real bugs: admin self-register priv-esc (High), 500-on-non-UUID
+  path ids on 4 endpoints, 500-on-NUL-byte in search. Triage in docs/zap-findings.md.)*
 - **Commit:** `security(zap): authenticated scan of merchant/admin surface`
 
-### GAP-12 · OpenTelemetry tracing — Domain 3 bonus (+10 pts)
-- [ ] **What:** unclaimed bonus: OTel tracing exported to Jaeger or Grafana Tempo.
+### GAP-12 · OpenTelemetry tracing — Domain 3 bonus (+10 pts) ✅ DONE 2026-07-13
+- [x] **What:** unclaimed bonus: OTel tracing exported to Jaeger or Grafana Tempo.
 - **How:** backend `opentelemetry-instrumentation-fastapi` + OTLP exporter; Jaeger
   all-in-one in compose; propagate the existing traceId. Frontend optional.
 - **Accept:** a request produces a visible trace in Jaeger UI; docs snippet with
   screenshot/instructions.
+  *(Done: FastAPI + SQLAlchemy instrumented, OTLP/HTTP → Jaeger all-in-one (UI
+  :16686). Opt-in via OTEL_ENABLED (compose sets it; no-op under pytest). Existing
+  X-Request-ID stamped on the span as shopflow.request_id for log↔trace correlation.
+  Verified via Jaeger API: request → 11-span trace with SQL child spans + the id tag.
+  Docs: docs/observability-tracing.md.)*
 - **Commit:** `feat(obs): OpenTelemetry tracing → Jaeger (PRD +10 bonus)`
 
-### GAP-13 · Scheduled CI runs for E2E/k6/ZAP — Domain 6 (optional hardening)
-- [ ] Nightly `schedule:` workflow running Playwright suite + k6 smoke + ZAP baseline
+### GAP-13 · Scheduled CI runs for E2E/k6/ZAP — Domain 6 (optional hardening) ✅ DONE 2026-07-13
+- [x] Nightly `schedule:` workflow running Playwright suite + k6 smoke + ZAP baseline
   against a compose-up stack. Keep it non-blocking (separate workflow).
+  *(`.github/workflows/nightly.yml`: schedule 03:00 UTC + workflow_dispatch, never
+  push/PR so it can't gate merges. Brings the full stack up, runs the 3 suites each
+  continue-on-error with a final gate. actionlint clean; components individually
+  verified this session. NOT yet executed on GitHub — needs a push + a scheduled/
+  dispatch run to confirm end-to-end.)*
 - **Commit:** `ci: nightly e2e + k6 + zap workflow`
 
-### GAP-14 · Copilot response streaming — Domain 5 (optional)
-- [ ] SSE streaming for `/merchant/copilot` + incremental rendering in the panel.
+### GAP-14 · Copilot response streaming — Domain 5 (optional) ✅ DONE 2026-07-13
+- [x] SSE streaming for `/merchant/copilot` + incremental rendering in the panel.
   Perceived-latency only; do this last.
+  *(POST /merchant/copilot/stream returns text/event-stream — delta/tool/done/error
+  events; streams each turn via client.messages.stream() inside the existing tool
+  loop. DB session opened inside the generator (a get_db yield-dependency deadlocks
+  under StreamingResponse). Frontend streamSSE reader + incremental bubble render.
+  Verified: 3 backend SSE tests + 2 FE RTL tests, live endpoint serves text/event-stream
+  with correct headers. Non-streaming /copilot kept for back-compat.)*
 
 ## Owner-only (Claude: surface these, don't attempt)
 

@@ -1,6 +1,7 @@
 """Platform-wide admin analytics + user/order management. Admin-only."""
 from datetime import datetime, timezone
 from decimal import Decimal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, select
@@ -109,7 +110,7 @@ async def list_users(
 
 @router.patch("/users/{user_id}", response_model=AdminUserResponse)
 async def update_user(
-    user_id: str,
+    user_id: UUID,
     body: AdminUserUpdate,
     request: Request,
     current_user: User = Depends(require_role(UserRole.admin)),
@@ -117,7 +118,7 @@ async def update_user(
 ):
     """Change a user's role and/or (de)activate them (soft delete/restore)."""
     user = (
-        await db.execute(select(User).where(User.id == user_id))
+        await db.execute(select(User).where(User.id == str(user_id)))
     ).scalar_one_or_none()
     if not user:
         raise _problem(
@@ -180,14 +181,14 @@ async def list_coupons(
 
 @router.delete("/coupons/{coupon_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def deactivate_coupon(
-    coupon_id: str,
+    coupon_id: UUID,
     request: Request,
     current_user: User = Depends(require_role(UserRole.admin)),
     db: AsyncSession = Depends(get_db),
 ):
     """Soft-disable a coupon (sets is_active=False) — existing orders keep their
     discount; the code can no longer be redeemed."""
-    coupon = (await db.execute(select(Coupon).where(Coupon.id == coupon_id))).scalar_one_or_none()
+    coupon = (await db.execute(select(Coupon).where(Coupon.id == str(coupon_id)))).scalar_one_or_none()
     if not coupon:
         raise _problem(status.HTTP_404_NOT_FOUND, "Not Found", "Coupon not found", request.url.path)
     coupon.is_active = False

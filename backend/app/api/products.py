@@ -14,7 +14,9 @@ from app.core.pagination import (
     MAX_PAGE_SIZE,
     apply_cursor,
     build_page,
+    decode_cursor_parts,
     encode_cursor,
+    encode_cursor_parts,
     resolve_page_size,
 )
 from app.models.models import Category, Product, ProductStatus, Review, User, UserRole
@@ -53,20 +55,14 @@ def _cursor_for(product: Product) -> str:
 # pagination helper is hard-wired to (created_at, id) and every other list
 # endpoint depends on it, so it stays untouched.
 def _encode_price_cursor(price: Decimal, id_: str) -> str:
-    import base64
-
-    return base64.urlsafe_b64encode(f"{price}|{id_}".encode()).decode().rstrip("=")
+    return encode_cursor_parts(str(price), id_)
 
 
 def _decode_price_cursor(cursor: str, request: Request) -> tuple[Decimal, str]:
-    import base64
-    import binascii
-
+    price_str, id_ = decode_cursor_parts(cursor, 2, instance=request.url.path)
     try:
-        padding = "=" * (-len(cursor) % 4)
-        price_str, id_ = base64.urlsafe_b64decode(cursor + padding).decode().split("|", 1)
         return Decimal(price_str), id_
-    except (ValueError, ArithmeticError, binascii.Error, UnicodeDecodeError):
+    except (ArithmeticError, ValueError):
         raise _problem(
             status.HTTP_400_BAD_REQUEST, "Bad Request",
             "Invalid pagination cursor", request.url.path,
@@ -90,6 +86,22 @@ _SEM_THRESHOLD = 0.3
 
 def _active_product_filters():
     return (Product.deleted_at.is_(None), Product.status == ProductStatus.active)
+
+
+async def _avg_ratings_for(db: AsyncSession, product_ids: list[str]) -> dict[str, float]:
+    """Map product_id → average review rating (2 dp) for the given ids.
+
+    One GROUP BY over the page/result set — cheaper than a correlated subquery
+    per row. Products with no reviews are simply absent from the map.
+    """
+    if not product_ids:
+        return {}
+    rows = await db.execute(
+        select(Review.product_id, func.avg(Review.rating))
+        .where(Review.product_id.in_(product_ids))
+        .group_by(Review.product_id)
+    )
+    return {pid: round(float(avg), 2) for pid, avg in rows}
 
 
 def _tsv_expr():
@@ -159,6 +171,7 @@ async def _hybrid_search(db: AsyncSession, q: str, limit: int):
 
 @router.get("/search", response_model=list[ProductSearchResult])
 async def search_products(
+    request: Request,
     q: str = Query(min_length=1, max_length=255),
     limit: int = Query(default=20, ge=1, le=50),
     mode: Literal["lexical", "semantic", "hybrid"] = Query(default="hybrid"),
@@ -171,6 +184,14 @@ async def search_products(
     - `hybrid` (default): weighted blend of both, favoring semantic for recall
       and lexical for exact-term precision.
     """
+    # NUL bytes pass Pydantic's min_length but Postgres text/tsquery reject them
+    # with a hard error — reject up front as a 400 rather than surfacing a 500.
+    if "\x00" in q:
+        raise _problem(
+            status.HTTP_400_BAD_REQUEST, "Bad Request",
+            "Search query contains an invalid null byte", request.url.path,
+        )
+
     if mode == "lexical":
         rows = await _lexical_search(db, q, limit)
     elif mode == "semantic":
@@ -178,13 +199,15 @@ async def search_products(
     else:
         rows = await _hybrid_search(db, q, limit)
 
-    return [
-        ProductSearchResult(
-            **ProductResponse.model_validate(p).model_dump(),
-            relevance_score=float(s),
-        )
-        for p, s in rows
-    ]
+    # ProductCard (shared with the list grid) renders stars from avg_rating, so
+    # search results must carry it too — otherwise rated products show as unrated.
+    avg_by_product = await _avg_ratings_for(db, [p.id for p, _ in rows])
+    results = []
+    for p, s in rows:
+        data = ProductResponse.model_validate(p).model_dump()
+        data["avg_rating"] = avg_by_product.get(p.id)
+        results.append(ProductSearchResult(**data, relevance_score=float(s)))
+    return results
 
 
 # ---------------------------------------------------------------------------
@@ -260,10 +283,15 @@ async def list_products(
             rows, page_size, lambda p: _encode_price_cursor(p.price, p.id)
         )
 
-    return PaginatedProducts(
-        items=[ProductResponse.model_validate(p) for p in items],
-        next_cursor=next_cursor,
-    )
+    avg_by_product = await _avg_ratings_for(db, [p.id for p in items])
+
+    responses = []
+    for p in items:
+        resp = ProductResponse.model_validate(p)
+        resp.avg_rating = avg_by_product.get(p.id)
+        responses.append(resp)
+
+    return PaginatedProducts(items=responses, next_cursor=next_cursor)
 
 
 # ---------------------------------------------------------------------------

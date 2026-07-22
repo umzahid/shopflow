@@ -83,14 +83,43 @@ export function ProductCard({ product, onAddToCart, className }: ProductCardProp
             {product.title}
           </Link>
         </h3>
-        {/* Rating placeholder until reviews API is wired client-side. Stars
-            convey shape, not just color, satisfying color-not-only rule. */}
-        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-          <Star className="h-3.5 w-3.5 fill-accent text-accent" aria-hidden="true" strokeWidth={1.5} />
-          <span className="font-medium tabular-nums">—</span>
-          <span aria-hidden="true">·</span>
-          <span>New listing</span>
-        </div>
+        {typeof product.avg_rating === "number" ? (
+          // Same star idiom as the detail page: 5 stars, fill by rounded average.
+          // role="img" + label keeps the rating readable to screen readers.
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <div
+              className="flex items-center gap-0.5"
+              role="img"
+              aria-label={`Rated ${product.avg_rating.toFixed(1)} out of 5`}
+            >
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Star
+                  key={i}
+                  aria-hidden="true"
+                  strokeWidth={1.5}
+                  className={cn(
+                    "h-3.5 w-3.5",
+                    i <= Math.round(product.avg_rating as number)
+                      ? "fill-accent text-accent"
+                      : "fill-muted text-muted-foreground",
+                  )}
+                />
+              ))}
+            </div>
+            <span className="font-medium tabular-nums">
+              {product.avg_rating.toFixed(1)}
+            </span>
+          </div>
+        ) : (
+          // No reviews yet (or a response that doesn't carry avg_rating). Stars
+          // convey shape, not just color, satisfying color-not-only rule.
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Star className="h-3.5 w-3.5 fill-accent text-accent" aria-hidden="true" strokeWidth={1.5} />
+            <span className="font-medium tabular-nums">—</span>
+            <span aria-hidden="true">·</span>
+            <span>New listing</span>
+          </div>
+        )}
         <p className="font-heading text-lg font-bold tabular-nums text-foreground">
           {formatPrice(product.price)}
         </p>

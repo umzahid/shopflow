@@ -3,6 +3,8 @@
 All endpoints are scoped to the authenticated user (`/users/me/...`); a user
 can only ever see or mutate their own records.
 """
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -125,13 +127,13 @@ async def _owned_address(db: AsyncSession, address_id: str, user: User, path: st
 
 @router.patch("/me/addresses/{address_id}", response_model=AddressResponse)
 async def update_address(
-    address_id: str,
+    address_id: UUID,
     body: AddressUpdate,
     request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    address = await _owned_address(db, address_id, current_user, request.url.path)
+    address = await _owned_address(db, str(address_id), current_user, request.url.path)
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(address, field, value)
     await db.flush()
@@ -143,12 +145,12 @@ async def update_address(
 
 @router.delete("/me/addresses/{address_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_address(
-    address_id: str,
+    address_id: UUID,
     request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    address = await _owned_address(db, address_id, current_user, request.url.path)
+    address = await _owned_address(db, str(address_id), current_user, request.url.path)
     await db.delete(address)
 
 

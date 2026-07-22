@@ -16,7 +16,7 @@ import os
 from dataclasses import dataclass, field
 from datetime import timedelta
 from decimal import Decimal
-from typing import Awaitable, Callable
+from typing import AsyncIterator, Awaitable, Callable
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,6 +32,12 @@ SYSTEM_PROMPT = (
     "the data they return — never invent numbers. If a tool returns no data, say "
     "so plainly. You cannot change any data. Politely decline requests unrelated "
     "to this merchant's store analytics. Keep answers concise."
+)
+
+# Shared by the blocking and streaming loops so they can't drift apart.
+REFUSAL_MESSAGE = "I'm sorry, I can't help with that request."
+EXHAUSTED_MESSAGE = (
+    "I wasn't able to finish answering that. Please try a more specific question."
 )
 
 
@@ -155,6 +161,25 @@ async def _dispatch(db, merchant, name: str, args: dict) -> dict:
         return {"error": str(e)}
 
 
+async def _dispatch_tool_uses(db, merchant, tool_uses, trace: list[ToolCall]) -> list[dict]:
+    """Run every tool_use block (merchant-scoped, in parallel), record the trace,
+    and return the tool_result blocks to append as the next user turn. Shared by
+    the blocking and streaming loops."""
+    results = await asyncio.gather(
+        *[_dispatch(db, merchant, b.name, b.input or {}) for b in tool_uses]
+    )
+    tool_results = []
+    for block, result in zip(tool_uses, results):
+        trace.append(ToolCall(tool=block.name, input=block.input or {}, result=result))
+        tool_results.append({
+            "type": "tool_result",
+            "tool_use_id": block.id,
+            "content": json.dumps(result, default=str),
+            "is_error": "error" in result,
+        })
+    return tool_results
+
+
 async def answer_question(db: AsyncSession, merchant: User, question: str) -> CopilotAnswer:
     turn = _current_llm()
     messages: list = [{"role": "user", "content": question}]
@@ -165,7 +190,7 @@ async def answer_question(db: AsyncSession, merchant: User, question: str) -> Co
         response = await turn(messages, TOOL_DEFS)
 
         if response.stop_reason == "refusal":
-            answer_text = "I'm sorry, I can't help with that request."
+            answer_text = REFUSAL_MESSAGE
             break
 
         text_parts = [b.text for b in response.content if b.type == "text" and b.text]
@@ -176,26 +201,143 @@ async def answer_question(db: AsyncSession, merchant: User, question: str) -> Co
 
         messages.append({"role": "assistant", "content": response.content})
         tool_uses = [b for b in response.content if b.type == "tool_use"]
-        results = await asyncio.gather(
-            *[_dispatch(db, merchant, b.name, b.input or {}) for b in tool_uses]
-        )
-
-        tool_results = []
-        for block, result in zip(tool_uses, results):
-            trace.append(ToolCall(tool=block.name, input=block.input or {}, result=result))
-            tool_results.append({
-                "type": "tool_result",
-                "tool_use_id": block.id,
-                "content": json.dumps(result, default=str),
-                "is_error": "error" in result,
-            })
+        tool_results = await _dispatch_tool_uses(db, merchant, tool_uses, trace)
         messages.append({"role": "user", "content": tool_results})
     else:
-        answer_text = answer_text or (
-            "I wasn't able to finish answering that. Please try a more specific question."
-        )
+        answer_text = answer_text or EXHAUSTED_MESSAGE
 
     return CopilotAnswer(answer=answer_text, tool_calls=trace)
+
+
+# ── Streaming variant ───────────────────────────────────────────────────────
+# A streaming turn is an async generator yielding ("delta", <text chunk>) as the
+# model produces text, then exactly one ("final", <LLMResponse-like>) carrying
+# the completed message (stop_reason + content blocks). Same swap-hook shape as
+# the blocking turn so tests never touch the network.
+LLMStreamTurn = Callable[[list, list], "AsyncIterator[tuple[str, object]]"]
+
+_llm_stream_override: LLMStreamTurn | None = None
+
+
+def set_llm_stream(fn: LLMStreamTurn | None) -> None:
+    """Test hook — swap in a scripted streaming turn fn, or None to restore."""
+    global _llm_stream_override
+    _llm_stream_override = fn
+
+
+async def _fake_stream_turn(messages, tools):
+    text = "(fake copilot) No live model configured."
+    for chunk in (text[:15], text[15:]):
+        yield ("delta", chunk)
+    yield ("final", LLMResponse("end_turn", [LLMBlock(type="text", text=text)]))
+
+
+async def _anthropic_stream_turn(messages, tools):  # pragma: no cover - needs anthropic + network
+    from anthropic import APIConnectionError, APIStatusError, RateLimitError
+
+    client = _get_client()
+    try:
+        async with client.messages.stream(
+            model=settings.COPILOT_MODEL,
+            max_tokens=2048,
+            system=[{
+                "type": "text",
+                "text": SYSTEM_PROMPT,
+                "cache_control": {"type": "ephemeral"},
+            }],
+            tools=tools,
+            tool_choice={"type": "auto"},
+            thinking={"type": "adaptive"},
+            extra_body={"output_config": {"effort": settings.COPILOT_EFFORT}},
+            messages=messages,
+        ) as stream:
+            async for text in stream.text_stream:
+                if text:
+                    yield ("delta", text)
+            yield ("final", await stream.get_final_message())
+    except RateLimitError as e:
+        raise CopilotError("The assistant is rate-limited; please retry shortly.", 503) from e
+    except (APIStatusError, APIConnectionError) as e:
+        raise CopilotError("The assistant is temporarily unavailable.", 502) from e
+
+
+def _current_llm_stream() -> LLMStreamTurn:
+    if _llm_stream_override is not None:
+        return _llm_stream_override
+    if os.getenv("SHOPFLOW_FAKE_COPILOT") == "1":
+        return _fake_stream_turn
+    return _anthropic_stream_turn
+
+
+def available() -> bool:
+    """Whether the copilot can serve a request (real key, fake toggle, or a test
+    override). Lets the streaming endpoint return a proper 503 *before* it starts
+    the SSE body, rather than only as an in-stream error event."""
+    return (
+        _llm_override is not None
+        or _llm_stream_override is not None
+        or os.getenv("SHOPFLOW_FAKE_COPILOT") == "1"
+        or bool(settings.ANTHROPIC_API_KEY)
+    )
+
+
+async def answer_question_stream(db: AsyncSession, merchant: User, question: str):
+    """Async generator of SSE-ready event dicts:
+      {"type": "delta", "text": ...}   incremental answer text
+      {"type": "tool",  "tool": name}  a tool was invoked this turn
+      {"type": "done",  "tool_calls": [names...]}   terminal success
+      {"type": "error", "detail": ...}             terminal failure
+    """
+    stream_turn = _current_llm_stream()
+    messages: list = [{"role": "user", "content": question}]
+    trace: list[ToolCall] = []
+
+    try:
+        for _ in range(settings.COPILOT_MAX_ITERATIONS):
+            final: LLMResponse | None = None
+            turn_text = ""
+            async for kind, payload in stream_turn(messages, TOOL_DEFS):
+                if kind == "delta" and payload:
+                    turn_text += payload
+                    yield {"type": "delta", "text": payload}
+                elif kind == "final":
+                    final = payload
+
+            if final is None:  # a turn that yielded no terminal message
+                yield {"type": "error", "detail": "The assistant returned no response."}
+                return
+
+            if final.stop_reason == "refusal":
+                yield {"type": "delta", "text": REFUSAL_MESSAGE}
+                break
+
+            if final.stop_reason != "tool_use":
+                # Reconcile: if this terminal turn produced no streamed text (e.g.
+                # the model returned text only in the final message), fall back to
+                # the final message's text blocks — matching the blocking path.
+                if not turn_text.strip():
+                    text = "\n".join(
+                        b.text for b in final.content if b.type == "text" and b.text
+                    ).strip()
+                    if text:
+                        yield {"type": "delta", "text": text}
+                break
+
+            messages.append({"role": "assistant", "content": final.content})
+            tool_uses = [b for b in final.content if b.type == "tool_use"]
+            for b in tool_uses:
+                yield {"type": "tool", "tool": b.name}
+            tool_results = await _dispatch_tool_uses(db, merchant, tool_uses, trace)
+            messages.append({"role": "user", "content": tool_results})
+        else:
+            # Loop exhausted without a terminal answer — always tell the user,
+            # even if partial preamble text streamed on an earlier turn (parity
+            # with the blocking path, which always returns this on exhaustion).
+            yield {"type": "delta", "text": EXHAUSTED_MESSAGE}
+
+        yield {"type": "done", "tool_calls": [c.tool for c in trace]}
+    except CopilotError as e:
+        yield {"type": "error", "detail": e.detail}
 
 
 REVENUE_STATUSES = (OrderStatus.confirmed, OrderStatus.shipped, OrderStatus.delivered)

@@ -122,3 +122,91 @@ export async function api<T>(
 
   return data as T;
 }
+
+/**
+ * POST a body and consume a Server-Sent Events response, invoking `onEvent` for
+ * each `data:` JSON payload. Mirrors `api()`'s auth + one-shot 401 refresh, but
+ * streams the body instead of buffering. Resolves when the stream ends.
+ */
+export async function streamSSE(
+  path: string,
+  body: unknown,
+  onEvent: (event: Record<string, unknown>) => void,
+): Promise<void> {
+  const url = `${API_BASE}${path}`;
+
+  const open = (token: string | null): Promise<Response> =>
+    fetch(url, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        Accept: "text/event-stream",
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+
+  let res = await open(useAuth.getState().accessToken);
+  if (res.status === 401) {
+    const refreshed = await refreshToken();
+    if (refreshed) {
+      res = await open(refreshed.access_token);
+    } else {
+      useAuth.getState().clearAuth();
+    }
+  }
+
+  if (!res.ok || !res.body) {
+    const text = await res.text().catch(() => "");
+    // The error body may not be JSON (e.g. an HTML 502 from a proxy) — don't
+    // let a parse failure mask the real status.
+    let data: unknown;
+    try {
+      data = text ? JSON.parse(text) : undefined;
+    } catch {
+      data = undefined;
+    }
+    if (data && typeof data === "object" && "title" in data && "status" in data) {
+      throw new ApiError(data as ProblemDetail);
+    }
+    throw new ApiError({
+      type: "about:blank",
+      title: "Error",
+      status: res.status,
+      detail: res.statusText || "Streaming request failed",
+      instance: path,
+    });
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  // SSE frames are separated by a blank line; a frame may span reads, so buffer.
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let sep: number;
+      while ((sep = buffer.indexOf("\n\n")) !== -1) {
+        const frame = buffer.slice(0, sep);
+        buffer = buffer.slice(sep + 2);
+        const line = frame.split("\n").find((l) => l.startsWith("data:"));
+        if (!line) continue;
+        // Parse and dispatch are separate: a malformed frame is skipped, but an
+        // error thrown by onEvent (e.g. a backend `error` event) must propagate.
+        let payload: Record<string, unknown>;
+        try {
+          payload = JSON.parse(line.slice(5).trim());
+        } catch {
+          continue; // ignore malformed frame
+        }
+        onEvent(payload);
+      }
+    }
+  } finally {
+    // Release the connection on any exit, including an onEvent throw.
+    reader.cancel().catch(() => {});
+  }
+}

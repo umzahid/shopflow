@@ -11,6 +11,7 @@ import {
   useRestockAlerts,
   useRevenueSummary,
 } from "@/lib/merchant";
+import { formatPrice as money, lastNDays } from "@/lib/utils";
 import type { OrderStatus } from "@/types/api";
 
 const STATUS_COLORS: Record<OrderStatus, string> = {
@@ -22,22 +23,11 @@ const STATUS_COLORS: Record<OrderStatus, string> = {
   cancelled: "#dc2626",
 };
 
-function money(v: string | number): string {
-  const n = typeof v === "string" ? Number(v) : v;
-  return n.toLocaleString(undefined, { style: "currency", currency: "USD" });
-}
-
-function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
-
 export default function MerchantDashboardPage() {
   const dash = useMerchantDashboard();
 
-  const today = new Date();
-  const start = new Date(today);
-  start.setDate(start.getDate() - 29);
-  const revenue = useRevenueSummary(isoDate(start), isoDate(today));
+  const { start, end } = lastNDays(30);
+  const revenue = useRevenueSummary(start, end);
   const restock = useRestockAlerts();
   const reviews = useMerchantReviews();
 
@@ -168,6 +158,7 @@ export default function MerchantDashboardPage() {
                 <li key={r.id} className="flex flex-col gap-1 py-2.5 text-sm">
                   <div className="flex items-center gap-2">
                     <span
+                      role="img"
                       aria-label={`${r.rating} out of 5 stars`}
                       className="font-semibold text-warning"
                     >

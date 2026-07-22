@@ -23,6 +23,8 @@ export interface Product {
   status: ProductStatus;
   created_at: string;
   updated_at: string;
+  /** Average review rating, 2 decimals. Only the list endpoint populates it; null = no reviews. */
+  avg_rating?: number | null;
 }
 
 export interface PaginatedProducts {

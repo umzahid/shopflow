@@ -199,3 +199,29 @@ async def test_rating_min_filter(client):
 
     all_titles = {i["title"] for i in (await client.get("/api/v1/products")).json()["items"]}
     assert all_titles == {"Good", "Bad", "Unrated"}
+
+
+@pytest.mark.asyncio
+async def test_list_includes_avg_rating(client):
+    mt, _ = await register_merchant(client, "mavg@e.com")
+    rated = await create_product(client, mt, title="Rated")
+    await create_product(client, mt, title="Unrated")
+
+    # Two customers so the product carries a non-trivial average (5 and 4 → 4.5).
+    for email, rating in (("cavg1@e.com", 5), ("cavg2@e.com", 4)):
+        ct, _ = await register_customer(client, email)
+        await add_to_cart(client, ct, rated["id"])
+        order = (await checkout(client, ct)).json()
+        await advance_order_to_delivered(client, mt, order["id"])
+        res = await client.post(
+            f"/api/v1/products/{rated['id']}/reviews",
+            json={"rating": rating, "body": "review"},
+            headers=bearer(ct),
+        )
+        assert res.status_code == 201, res.text
+
+    items = {i["title"]: i for i in (await client.get("/api/v1/products")).json()["items"]}
+    # Same shape the detail page's histogram uses: float rounded to 2 places;
+    # None (not 0) distinguishes "no reviews yet" from a genuinely low rating.
+    assert items["Rated"]["avg_rating"] == 4.5
+    assert items["Unrated"]["avg_rating"] is None

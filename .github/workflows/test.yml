@@ -4,7 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    # split/** so stacked PRs (base = an earlier PR's branch) still get CI
+    branches: [main, "split/**"]
 
 jobs:
   # ── 1. Backend Lint ────────────────────────────────────────────────────────
@@ -245,40 +246,12 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Write CI .env for docker compose
-        run: |
-          {
-            echo "APP_ENV=ci"
-            echo "DEBUG=false"
-            echo "POSTGRES_PASSWORD=testpassword"
-            echo "DATABASE_URL=postgresql+asyncpg://shopflow:testpassword@postgres:5432/shopflow"
-            echo "REDIS_PASSWORD=testredis"
-            echo "REDIS_URL=redis://:testredis@redis:6379/0"
-            echo "JWT_SECRET_KEY=ci-test-secret-key-not-for-production-use-64-chars-minimum-xxxx"
-            echo "JWT_ALGORITHM=HS256"
-            echo "JWT_ACCESS_TOKEN_EXPIRE_MINUTES=15"
-            echo "JWT_REFRESH_TOKEN_EXPIRE_DAYS=7"
-            echo "COOKIE_SECURE=false"
-            echo "COOKIE_SAMESITE=lax"
-            echo "COOKIE_DOMAIN="
-            echo 'CORS_ORIGINS=["http://localhost:3000"]'
-            echo "GRAFANA_PASSWORD=admin"
-            echo "AWS_REGION=us-east-1"
-            echo "AWS_ACCESS_KEY_ID="
-            echo "AWS_SECRET_ACCESS_KEY="
-            echo "S3_BUCKET_NAME=shopflow-test"
-            echo "ANTHROPIC_API_KEY="
-            echo "NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1"
-          } > .env
+        run: cp .github/workflows/ci.env .env
 
       - name: Build and start backend + dependencies
         run: |
           docker compose up -d postgres redis backend
-          echo "Waiting for backend to become healthy..."
-          timeout 90 bash -c '
-            until curl -sf http://localhost:8000/health; do
-              sleep 3
-            done
-          '
+          ./scripts/wait-for-health.sh http://localhost:8000/health 90 backend
 
       - name: Run Alembic migrations
         run: docker compose exec -T backend alembic upgrade head

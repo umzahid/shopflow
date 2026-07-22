@@ -42,6 +42,10 @@ class ProductResponse(BaseModel):
     status: ProductStatus
     created_at: datetime
     updated_at: datetime
+    # Populated by the list + search endpoints (None = no reviews yet); the
+    # single-product endpoints leave it None — the detail page reads the
+    # reviews histogram instead.
+    avg_rating: float | None = None
 
     model_config = {"from_attributes": True}
 

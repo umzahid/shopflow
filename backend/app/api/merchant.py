@@ -7,8 +7,10 @@ sees data on their own products.
 import json
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -332,7 +334,7 @@ async def merchant_orders(
     response_model=ProductForecastResponse,
 )
 async def product_forecast(
-    product_id: str,
+    product_id: UUID,
     request: Request,
     horizon: int = Query(default=30, ge=1, le=180),
     force_refresh: bool = Query(default=False),
@@ -345,10 +347,14 @@ async def product_forecast(
     revenue-status sales history — Prophet fits below that threshold produce
     uninformative confidence bands.
     """
+    # UUID path param → str for the native-uuid column comparison and the
+    # downstream service/response (which work in string ids), matching the
+    # convention used elsewhere (e.g. get_product).
+    pid = str(product_id)
     product = (
         await db.execute(
             select(Product).where(
-                Product.id == product_id, Product.deleted_at.is_(None)
+                Product.id == pid, Product.deleted_at.is_(None)
             )
         )
     ).scalar_one_or_none()
@@ -363,9 +369,9 @@ async def product_forecast(
             "You do not own this product", request.url.path,
         )
 
-    points = await forecast_product_demand(db, product_id, horizon, force_refresh=force_refresh)
+    points = await forecast_product_demand(db, pid, horizon, force_refresh=force_refresh)
     return ProductForecastResponse(
-        product_id=product_id,
+        product_id=pid,
         horizon_days=horizon,
         points=[
             ForecastPointResponse(
@@ -445,6 +451,57 @@ async def merchant_copilot(
         tool_calls=[
             ToolCallTrace(tool=c.tool, input=c.input, result=c.result) for c in result.tool_calls
         ],
+    )
+
+
+@router.post("/copilot/stream")
+async def merchant_copilot_stream(
+    body: CopilotRequest,
+    request: Request,
+    current_user: User = Depends(require_role(UserRole.merchant)),
+):
+    """Streaming (SSE) copilot — same read-only analytics as /copilot, but the
+    answer text streams as it's generated for lower perceived latency. Events are
+    JSON per SSE `data:` line: delta | tool | done | error.
+
+    The DB session is opened *inside* the streaming generator rather than via a
+    `get_db` dependency: a yield-dependency's teardown is ordered against the
+    response body and deadlocks under StreamingResponse. The session lives and
+    closes entirely within the stream instead.
+    """
+    question = body.question.strip()
+    if not question:
+        raise _problem(
+            status.HTTP_400_BAD_REQUEST, "Bad Request",
+            "question must not be empty", request.url.path,
+        )
+    # Fail with a real 503 before the SSE body starts if the copilot isn't
+    # configured — matching the blocking endpoint. Errors that only surface once
+    # streaming has begun (rate limit, mid-run failure) can't change the status
+    # and are delivered as terminal `error` events instead.
+    if not copilot_svc.available():
+        raise _problem(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "Service Unavailable",
+            "The copilot is not configured on this deployment.", request.url.path,
+        )
+
+    async def event_stream():
+        # Resolve the session factory at call time so the test suite's patched
+        # AsyncSessionLocal (test DB) is picked up.
+        from app.core.database import AsyncSessionLocal
+
+        async with AsyncSessionLocal() as db:
+            async for event in copilot_svc.answer_question_stream(db, current_user, question):
+                yield f"data: {json.dumps(event)}\n\n"
+            # Parity with get_db's auto-commit contract (tools are read-only
+            # today, but the shared loop may gain a write tool later).
+            await db.commit()
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        # Disable proxy buffering so deltas reach the browser immediately.
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 

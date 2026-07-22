@@ -6,7 +6,7 @@ import {
   type UseQueryResult,
 } from "@tanstack/react-query";
 
-import { api } from "@/lib/api";
+import { api, streamSSE } from "@/lib/api";
 import type {
   CopilotResponse,
   DescriptionRequest,
@@ -153,7 +153,7 @@ export function useGenerateDescription(): UseMutationResult<
   });
 }
 
-/** POST /merchant/copilot — single-turn NL analytics. */
+/** POST /merchant/copilot — single-turn NL analytics (non-streaming). */
 export function useCopilot(): UseMutationResult<CopilotResponse, Error, string> {
   return useMutation({
     mutationFn: (question) =>
@@ -162,6 +162,28 @@ export function useCopilot(): UseMutationResult<CopilotResponse, Error, string> 
         body: { question },
       }),
   });
+}
+
+/**
+ * POST /merchant/copilot/stream — SSE analytics. `onDelta` fires per answer
+ * chunk; resolves with the list of tools the copilot used. Rejects with an
+ * Error carrying the server's detail on an error event or transport failure.
+ */
+export async function streamCopilot(
+  question: string,
+  onDelta: (text: string) => void,
+): Promise<string[]> {
+  const tools: string[] = [];
+  await streamSSE("/merchant/copilot/stream", { question }, (event) => {
+    if (event.type === "delta" && typeof event.text === "string") {
+      onDelta(event.text);
+    } else if (event.type === "tool" && typeof event.tool === "string") {
+      tools.push(event.tool);
+    } else if (event.type === "error" && typeof event.detail === "string") {
+      throw new Error(event.detail);
+    }
+  });
+  return tools;
 }
 
 /** POST /merchant/weekly-narrative — AI week-in-review. refresh bypasses the 24h cache. */

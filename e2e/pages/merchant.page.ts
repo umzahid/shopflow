@@ -65,3 +65,15 @@ export class MerchantOrdersPage {
     return this.row(orderId).getByRole("button", { name: "View" });
   }
 }
+
+export class MerchantAnalyticsPage {
+  readonly heading: Locator;
+
+  constructor(readonly page: Page) {
+    this.heading = page.getByRole("heading", { name: "Analytics", level: 1 });
+  }
+
+  async goto() {
+    await this.page.goto("/merchant/analytics");
+  }
+}

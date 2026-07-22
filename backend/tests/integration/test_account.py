@@ -91,6 +91,18 @@ async def test_address_crud(client):
 
 
 @pytest.mark.asyncio
+async def test_address_endpoints_reject_non_uuid(client):
+    # A non-UUID address id must 422, not 500 (found by the authenticated ZAP scan).
+    token, _ = await register_customer(client, "addruuid@e.com")
+    patched = await client.patch(
+        "/api/v1/users/me/addresses/not-a-uuid", json={"city": "X"}, headers=bearer(token)
+    )
+    assert patched.status_code == 422, patched.text
+    deleted = await client.delete("/api/v1/users/me/addresses/not-a-uuid", headers=bearer(token))
+    assert deleted.status_code == 422, deleted.text
+
+
+@pytest.mark.asyncio
 async def test_only_one_default_address(client):
     token, _ = await register_customer(client, "def@e.com")
     a = await client.post("/api/v1/users/me/addresses", json={**ADDR, "is_default": True}, headers=bearer(token))

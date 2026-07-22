@@ -136,39 +136,40 @@ export default function ProductDetailPage() {
                   ))}
                 </div>
                 {gallery.length > 1 && (
-                  <ul
+                  // Tabs must be direct children of the tablist for ARIA
+                  // ownership — no list wrappers (axe: aria-required-children).
+                  <div
                     role="tablist"
                     aria-label="Product images"
                     className="grid grid-cols-5 gap-2"
                   >
                     {gallery.slice(0, 5).map((img, i) => (
-                      <li key={img}>
-                        <button
-                          type="button"
-                          role="tab"
-                          aria-selected={i === activeIdx}
-                          aria-label={`Show image ${i + 1}`}
-                          onClick={() => setActiveIdx(i)}
-                          className={cn(
-                            "relative block aspect-square w-full cursor-pointer overflow-hidden rounded-md border-2 bg-muted transition-[border-color,transform] duration-200",
-                            "hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                            "motion-reduce:transition-none motion-reduce:hover:transform-none",
-                            i === activeIdx
-                              ? "border-secondary"
-                              : "border-border",
-                          )}
-                        >
-                          <Image
-                            src={img}
-                            alt=""
-                            fill
-                            sizes="80px"
-                            className="object-cover"
-                          />
-                        </button>
-                      </li>
+                      <button
+                        key={img}
+                        type="button"
+                        role="tab"
+                        aria-selected={i === activeIdx}
+                        aria-label={`Show image ${i + 1}`}
+                        onClick={() => setActiveIdx(i)}
+                        className={cn(
+                          "relative block aspect-square w-full cursor-pointer overflow-hidden rounded-md border-2 bg-muted transition-[border-color,transform] duration-200",
+                          "hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                          "motion-reduce:transition-none motion-reduce:hover:transform-none",
+                          i === activeIdx
+                            ? "border-secondary"
+                            : "border-border",
+                        )}
+                      >
+                        <Image
+                          src={img}
+                          alt=""
+                          fill
+                          sizes="80px"
+                          className="object-cover"
+                        />
+                      </button>
                     ))}
-                  </ul>
+                  </div>
                 )}
               </div>
 
@@ -312,6 +313,7 @@ export default function ProductDetailPage() {
                         >
                           <div className="mb-2 flex items-center gap-2">
                             <div
+                              role="img"
                               aria-label={`${r.rating} of 5 stars`}
                               className="flex items-center gap-0.5"
                             >

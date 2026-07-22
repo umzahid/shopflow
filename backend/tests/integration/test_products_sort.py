@@ -64,3 +64,14 @@ async def test_default_sort_is_newest(client):
 async def test_invalid_sort_rejected(client):
     res = await client.get("/api/v1/products?sort=bogus")
     assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_price_sort_rejects_bad_cursor(client):
+    # The price cursor shares the base64 codec; a garbage cursor is a clean 400
+    # (RFC 7807), not a 500 from the Decimal/base64 decode.
+    res = await client.get("/api/v1/products?sort=price_asc&cursor=not-a-valid-cursor")
+    assert res.status_code == 400
+    body = res.json()
+    assert body["status"] == 400
+    assert body["detail"] == "Invalid pagination cursor"

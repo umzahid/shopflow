@@ -12,7 +12,7 @@ from app.core.security import (
     refresh_token_redis_key,
     verify_password,
 )
-from app.models.models import User
+from app.models.models import User, UserRole
 from app.schemas.auth import Token, UserCreate, UserLogin, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -54,6 +54,17 @@ async def register(
     response: Response,
     db: AsyncSession = Depends(get_db),
 ):
+    # Public self-registration is for customers and merchants only. Admin is a
+    # privileged role and must be provisioned out-of-band — accepting it here
+    # would let anyone mint an admin account (broken access control, OWASP A01).
+    # The one exception is the test/CI escape hatch (guarded off in production by
+    # a startup check in config.py) so the e2e suite can provision an admin.
+    if body.role == UserRole.admin and not settings.ALLOW_ADMIN_SELF_REGISTRATION:
+        raise _problem(
+            status.HTTP_403_FORBIDDEN, "Forbidden",
+            "Cannot self-register with the admin role", request.url.path,
+        )
+
     existing = await db.execute(select(User).where(User.email == body.email, User.deleted_at.is_(None)))
     if existing.scalar_one_or_none():
         raise _problem(status.HTTP_409_CONFLICT, "Conflict", "Email already registered", request.url.path)

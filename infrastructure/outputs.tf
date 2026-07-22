@@ -62,3 +62,13 @@ output "product_images_bucket" {
   description = "S3 product-images bucket name."
   value       = module.storage.bucket_id
 }
+
+output "route53_zone_id" {
+  description = "Hosted zone id for the app domain."
+  value       = module.route53.zone_id
+}
+
+output "route53_name_servers" {
+  description = "Delegation name servers for the hosted zone."
+  value       = module.route53.name_servers
+}
