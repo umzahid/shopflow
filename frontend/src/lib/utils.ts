@@ -12,3 +12,16 @@ export function formatPrice(value: string | number): string {
     currency: "USD",
   }).format(n);
 }
+
+/** UTC date as `YYYY-MM-DD`. */
+export function isoDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+/** Inclusive `{start, end}` ISO window covering the last `n` days ending today. */
+export function lastNDays(n: number): { start: string; end: string } {
+  const today = new Date();
+  const start = new Date(today);
+  start.setDate(start.getDate() - (n - 1));
+  return { start: isoDate(start), end: isoDate(today) };
+}

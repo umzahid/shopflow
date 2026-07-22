@@ -1,13 +1,11 @@
+# Provider sources only — version pins live in the root module (../../versions.tf).
 terraform {
-  required_version = ">= 1.5"
   required_providers {
     aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.60"
+      source = "hashicorp/aws"
     }
     random = {
-      source  = "hashicorp/random"
-      version = "~> 3.6"
+      source = "hashicorp/random"
     }
   }
 }

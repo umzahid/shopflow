@@ -10,8 +10,6 @@ from fastapi.exceptions import HTTPException as FastAPIHTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from app.api import (
     admin,
@@ -29,7 +27,7 @@ from app.core.config import settings
 from app.core.database import engine
 from app.core.logging import configure_logging, trace_id_var
 from app.core.metrics import instrument_engine, refresh_active_orders_loop
-from app.core.redis import close_redis
+from app.core.redis import close_redis, get_redis
 from app.core.security import decode_access_token
 from app.core.tracing import configure_tracing
 
@@ -46,6 +44,10 @@ def _parse_limit(value: str) -> int:
     return int(value.split("/", 1)[0])
 
 
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "127.0.0.1"
+
+
 def _rate_limit_for(request: Request) -> tuple[str, int]:
     """(bucket key, max requests/window). Authenticated → per-user + the higher
     tier; anonymous → per-IP + the public tier."""
@@ -56,19 +58,36 @@ def _rate_limit_for(request: Request) -> tuple[str, int]:
             return f"user:{payload['sub']}", _parse_limit(settings.RATE_LIMIT_AUTHENTICATED)
         except Exception:  # noqa: BLE001 - any decode failure falls back to IP tier
             pass
-    return f"ip:{get_remote_address(request)}", _parse_limit(settings.RATE_LIMIT_PUBLIC)
+    return f"ip:{_client_ip(request)}", _parse_limit(settings.RATE_LIMIT_PUBLIC)
 
 
-# Simple in-memory fixed-window counter: key -> [window_start_monotonic, count].
-# Single-process (matches slowapi's default in-memory storage); for multi-replica
-# swap for a Redis-backed store. slowapi's Limiter is kept only as the enable
-# toggle (conftest flips .enabled off so the test suite isn't throttled).
-_rl_buckets: dict[str, list] = {}
-limiter = Limiter(
-    key_func=get_remote_address,
-    enabled=settings.RATE_LIMIT_ENABLED,
-    default_limits=[settings.RATE_LIMIT_PUBLIC],
-)
+class _RateLimiter:
+    """Enable toggle for the rate-limit middleware. An instance attribute so the
+    test suite (and conftest) can flip `.enabled` at runtime."""
+
+    def __init__(self, enabled: bool) -> None:
+        self.enabled = enabled
+
+
+limiter = _RateLimiter(settings.RATE_LIMIT_ENABLED)
+
+
+async def _rate_limit_retry_after(bucket: str, max_requests: int) -> int | None:
+    """Redis-backed fixed window, shared across replicas (INCR + EXPIRE). Returns
+    the seconds to wait if `bucket` is over its per-window limit, else None. Fails
+    open on any Redis error so a cache blip can't take the whole API down."""
+    key = f"ratelimit:{bucket}"
+    try:
+        redis = await get_redis()
+        count = await redis.incr(key)
+        if count == 1:
+            await redis.expire(key, RATE_LIMIT_WINDOW_SECONDS)
+        if count > max_requests:
+            ttl = await redis.ttl(key)
+            return ttl if ttl and ttl > 0 else RATE_LIMIT_WINDOW_SECONDS
+        return None
+    except Exception:  # noqa: BLE001 - fail open on Redis errors
+        return None
 
 
 def _too_many_requests(path: str, retry_after: int) -> JSONResponse:
@@ -106,23 +125,16 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Rate limiting — enforced by the custom middleware below (fixed-window, tiered).
-app.state.limiter = limiter
 
-
+# Rate limiting — enforced by the custom middleware below (Redis-backed
+# fixed-window, tiered per-IP / per-user).
 @app.middleware("http")
 async def rate_limit(request: Request, call_next):
     if not limiter.enabled:
         return await call_next(request)
-    key, max_requests = _rate_limit_for(request)
-    now = time.monotonic()
-    window = _rl_buckets.get(key)
-    if window is None or now - window[0] >= RATE_LIMIT_WINDOW_SECONDS:
-        window = [now, 0]
-        _rl_buckets[key] = window
-    window[1] += 1
-    if window[1] > max_requests:
-        retry_after = max(1, int(RATE_LIMIT_WINDOW_SECONDS - (now - window[0])))
+    bucket, max_requests = _rate_limit_for(request)
+    retry_after = await _rate_limit_retry_after(bucket, max_requests)
+    if retry_after is not None:
         return _too_many_requests(request.url.path, retry_after)
     return await call_next(request)
 

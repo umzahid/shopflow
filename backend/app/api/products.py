@@ -14,7 +14,9 @@ from app.core.pagination import (
     MAX_PAGE_SIZE,
     apply_cursor,
     build_page,
+    decode_cursor_parts,
     encode_cursor,
+    encode_cursor_parts,
     resolve_page_size,
 )
 from app.models.models import Category, Product, ProductStatus, Review, User, UserRole
@@ -53,20 +55,14 @@ def _cursor_for(product: Product) -> str:
 # pagination helper is hard-wired to (created_at, id) and every other list
 # endpoint depends on it, so it stays untouched.
 def _encode_price_cursor(price: Decimal, id_: str) -> str:
-    import base64
-
-    return base64.urlsafe_b64encode(f"{price}|{id_}".encode()).decode().rstrip("=")
+    return encode_cursor_parts(str(price), id_)
 
 
 def _decode_price_cursor(cursor: str, request: Request) -> tuple[Decimal, str]:
-    import base64
-    import binascii
-
+    price_str, id_ = decode_cursor_parts(cursor, 2, instance=request.url.path)
     try:
-        padding = "=" * (-len(cursor) % 4)
-        price_str, id_ = base64.urlsafe_b64decode(cursor + padding).decode().split("|", 1)
         return Decimal(price_str), id_
-    except (ValueError, ArithmeticError, binascii.Error, UnicodeDecodeError):
+    except (ArithmeticError, ValueError):
         raise _problem(
             status.HTTP_400_BAD_REQUEST, "Bad Request",
             "Invalid pagination cursor", request.url.path,

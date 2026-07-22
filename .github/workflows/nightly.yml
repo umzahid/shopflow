@@ -29,43 +29,21 @@ jobs:
           cache: npm
           cache-dependency-path: e2e/package-lock.json
 
-      # Rate limits are set high: the full E2E suite and the ZAP scans all come
-      # from a single client IP and would otherwise trip RATE_LIMIT_PUBLIC.
+      # Shared CI env + rate-limit overrides: the full E2E suite and the ZAP
+      # scans all come from one client IP and would otherwise trip the limits.
       - name: Write CI .env for docker compose
         run: |
+          cp .github/workflows/ci.env .env
           {
-            echo "APP_ENV=ci"
-            echo "DEBUG=false"
-            echo "POSTGRES_PASSWORD=testpassword"
-            echo "DATABASE_URL=postgresql+asyncpg://shopflow:testpassword@postgres:5432/shopflow"
-            echo "REDIS_PASSWORD=testredis"
-            echo "REDIS_URL=redis://:testredis@redis:6379/0"
-            echo "JWT_SECRET_KEY=ci-test-secret-key-not-for-production-use-64-chars-minimum-xxxx"
-            echo "JWT_ALGORITHM=HS256"
-            echo "JWT_ACCESS_TOKEN_EXPIRE_MINUTES=15"
-            echo "JWT_REFRESH_TOKEN_EXPIRE_DAYS=7"
-            echo "COOKIE_SECURE=false"
-            echo "COOKIE_SAMESITE=lax"
-            echo "COOKIE_DOMAIN="
-            echo 'CORS_ORIGINS=["http://localhost:3000"]'
             echo "RATE_LIMIT_PUBLIC=1000000/minute"
             echo "RATE_LIMIT_AUTHENTICATED=1000000/minute"
-            echo "GRAFANA_PASSWORD=admin"
-            echo "AWS_REGION=us-east-1"
-            echo "AWS_ACCESS_KEY_ID="
-            echo "AWS_SECRET_ACCESS_KEY="
-            echo "S3_BUCKET_NAME=shopflow-test"
-            echo "ANTHROPIC_API_KEY="
-            echo "NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1"
-          } > .env
+          } >> .env
 
       - name: Build & start the full stack
         run: |
           docker compose up -d --build
-          echo "Waiting for backend health..."
-          timeout 180 bash -c 'until curl -sf http://localhost:8000/health; do sleep 3; done'
-          echo "Waiting for frontend health..."
-          timeout 180 bash -c 'until curl -sf http://localhost:3000/api/health; do sleep 3; done'
+          ./scripts/wait-for-health.sh http://localhost:8000/health 180 backend
+          ./scripts/wait-for-health.sh http://localhost:3000/api/health 180 frontend
 
       - name: Run Alembic migrations
         run: docker compose exec -T backend alembic upgrade head

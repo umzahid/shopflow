@@ -21,29 +21,48 @@ const SUGGESTIONS = [
 ];
 
 /** Very small markdown: **bold**, `- ` bullets, and paragraph breaks. */
+/** Inline **bold** → <strong>, everything else as text. */
+function renderInline(line: string): React.ReactNode {
+  return line.split(/(\*\*[^*]+\*\*)/g).map((seg, j) =>
+    seg.startsWith("**") && seg.endsWith("**") ? (
+      <strong key={j}>{seg.slice(2, -2)}</strong>
+    ) : (
+      <span key={j}>{seg}</span>
+    ),
+  );
+}
+
 function renderMarkdown(text: string): React.ReactNode {
-  return text.split("\n").map((line, i) => {
-    const trimmed = line.trim();
-    const bolded = line.split(/(\*\*[^*]+\*\*)/g).map((seg, j) =>
-      seg.startsWith("**") && seg.endsWith("**") ? (
-        <strong key={j}>{seg.slice(2, -2)}</strong>
-      ) : (
-        <span key={j}>{seg}</span>
-      ),
+  const blocks: React.ReactNode[] = [];
+  let bullets: string[] = [];
+  // Consecutive `- ` lines must share one <ul> — bare <li>s are invalid HTML
+  // and break list semantics for screen readers.
+  const flushBullets = () => {
+    if (bullets.length === 0) return;
+    blocks.push(
+      <ul key={`ul-${blocks.length}`} className="ml-4 list-disc space-y-0.5">
+        {bullets.map((b, j) => (
+          <li key={j}>{renderInline(b)}</li>
+        ))}
+      </ul>,
     );
-    if (trimmed.startsWith("- ")) {
-      return (
-        <li key={i} className="ml-4 list-disc">
-          {line.replace(/^\s*-\s/, "")}
-        </li>
-      );
+    bullets = [];
+  };
+
+  text.split("\n").forEach((line, i) => {
+    if (line.trim().startsWith("- ")) {
+      bullets.push(line.replace(/^\s*-\s/, ""));
+      return;
     }
-    return (
-      <p key={i} className={trimmed ? "" : "h-2"}>
-        {bolded}
-      </p>
+    flushBullets();
+    blocks.push(
+      <p key={`p-${i}`} className={line.trim() ? "" : "h-2"}>
+        {renderInline(line)}
+      </p>,
     );
   });
+  flushBullets();
+  return blocks;
 }
 
 export function MerchantCopilot() {

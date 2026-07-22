@@ -12,6 +12,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { ApiError } from "@/lib/api";
+import { formatPrice as money } from "@/lib/utils";
 import {
   useAddresses,
   useCreateAddress,
@@ -32,10 +33,6 @@ const TABS = [
   { key: "reviews", label: "Reviews", icon: Star },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
-
-function money(v: string): string {
-  return Number(v).toLocaleString(undefined, { style: "currency", currency: "USD" });
-}
 
 export default function AccountPage() {
   return (
