@@ -57,7 +57,9 @@ async def register(
     # Public self-registration is for customers and merchants only. Admin is a
     # privileged role and must be provisioned out-of-band — accepting it here
     # would let anyone mint an admin account (broken access control, OWASP A01).
-    if body.role == UserRole.admin:
+    # The one exception is the test/CI escape hatch (guarded off in production by
+    # a startup check in config.py) so the e2e suite can provision an admin.
+    if body.role == UserRole.admin and not settings.ALLOW_ADMIN_SELF_REGISTRATION:
         raise _problem(
             status.HTTP_403_FORBIDDEN, "Forbidden",
             "Cannot self-register with the admin role", request.url.path,

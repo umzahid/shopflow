@@ -28,8 +28,13 @@ async def test_register_merchant_role_allowed(client):
 
 
 @pytest.mark.asyncio
-async def test_register_cannot_self_assign_admin(client):
+async def test_register_cannot_self_assign_admin(client, monkeypatch):
     # Privilege escalation guard: the public endpoint must never mint an admin.
+    # Force the escape-hatch flag off so this asserts the default-deny path
+    # regardless of ambient config (local .env / ci.env may enable it for e2e).
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "ALLOW_ADMIN_SELF_REGISTRATION", False)
     res = await client.post("/api/v1/auth/register", json={
         "email": "sneaky-admin@shopflow.io",
         "password": "Password123",
@@ -39,6 +44,25 @@ async def test_register_cannot_self_assign_admin(client):
     assert res.json()["status"] == 403
     # And no admin account was created — a subsequent login is still non-admin.
     assert "access_token" not in res.json()
+
+
+@pytest.mark.asyncio
+async def test_register_admin_allowed_when_flag_enabled(client, monkeypatch):
+    # Test/CI escape hatch: with ALLOW_ADMIN_SELF_REGISTRATION on, /register may
+    # mint an admin. This exists only so the e2e suite can provision an admin —
+    # the Playwright container has no DB access to promote one the way the
+    # backend integration helper does. The prod-startup guard (test_config)
+    # ensures this can never be True in a real environment.
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "ALLOW_ADMIN_SELF_REGISTRATION", True)
+    res = await client.post("/api/v1/auth/register", json={
+        "email": "ci-provisioned-admin@shopflow.io",
+        "password": "Password123",
+        "role": "admin",
+    })
+    assert res.status_code == 201, res.text
+    assert res.json()["user"]["role"] == "admin"
 
 
 @pytest.mark.asyncio
